@@ -54,6 +54,8 @@ A parquet file representing a single sample's read-by-read data, sorted by `t_id
 
 ### 2. `<REPORT_PARQUET>`
 A single long-format parquet file containing merged, relevant counts from multiple report files.
+Sorted by `year`, `week`, `sample_id`, and `t_id`. Compressed with `zstd`.
+
 | Column | Type | Description |
 | :--- | :--- | :--- |
 | `sample_id` | String | The sample ID |
@@ -64,6 +66,7 @@ A single long-format parquet file containing merged, relevant counts from multip
 | `taxon_reads` | UInt32 | Reads assigned directly to this taxon |
 | `mm_tot` | UInt64 | Total minimizer matches (includes duplicates) |
 | `mm_uniq` | UInt32 | Estimated distinct minimizer matches |
+| `source_file` | String | Path to the original Kraken report file (relative to input) |
 
 ---
 
@@ -79,9 +82,19 @@ Converts Kraken output into Polars-optimized Parquet files.
 
 #### `gather_reports`
 Merges multiple 8-column Kraken reports into a single Parquet file.
-- **Inputs:** Multiple `<REPORT_FILE>`s or a directory.
+- **Inputs:** A directory containing report files.
 - **Outputs:** `<REPORT_PARQUET>`
-> **AI DIRECTIVE:** Before implementing, prompt the user to discuss preferred Parquet sorting strategies, compression algorithms, directory input UX, and provenance metadata tracking.
+- **Arguments:**
+  - `DIRECTORY`: Input directory to search for reports.
+  - `--output FILE`: Path to the output Parquet file.
+  - `--recursive / --no-recursive`: Search subdirectories (Default: True).
+  - `--include GLOB`: Pattern to match report files (Default: `*.report`).
+- **Implementation Details:**
+  - Sort by `[year, week, sample_id, t_id]`.
+  - Compress with `zstd` (level 3).
+  - Extract `sample_id` from filename (base name before all extensions).
+  - Validate `sample_id` using `parse_sample_id()`.
+  - Include `source_file` column for provenance.
 
 #### `prune_parquet` (Future)
 Reduces columns in `<KRAKEN_PARQUET>` files (e.g., dropping k-mer strings after GBM feature calculation) to save space.
@@ -153,5 +166,8 @@ Generates Krona plots from abundance tables. Needs further discussion.
 - 6-column Kraken read-by-read files (custom fork containing MHG).
 
 ### Roadmap
-1. Generate test data (Ljungbyhed sample, 100 reads, varying qual/len).
-2. TBD...
+1. [x] Generate test data (Ljungbyhed sample, 100 reads, mock taxonomy).
+2. [ ] Implement `gather_reports` to merge Kraken reports.
+3. [ ] Implement `table` for abundance matrix generation.
+4. [ ] Implement `extract_reads` for FASTQ streaming.
+5. [ ] TBD...
