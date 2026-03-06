@@ -181,6 +181,6 @@ Prints the global metadata stored in a SweetBITS-generated Parquet file.
 ### Roadmap
 1. [x] Generate test data (Ljungbyhed sample, 100 reads, mock taxonomy).
 2. [x] Implement `gather_reports` to merge Kraken reports.
-3. [ ] Implement `table` for abundance matrix generation.
+3. [x] Implement `table` for abundance matrix generation.
 4. [ ] Implement `extract_reads` for FASTQ streaming.
 5. [ ] TBD...

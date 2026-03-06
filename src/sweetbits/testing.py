@@ -90,7 +90,7 @@ def generate_mock_kraken_parquet(
     ])
     
     if output_path:
-        metadata = get_standard_metadata(file_type="KRAKEN_PARQUET")
+        metadata = get_standard_metadata(file_type="KRAKEN_PARQUET", source_path=Path.cwd())
         write_parquet_with_metadata(df, output_path, metadata)
     
     return df
@@ -129,7 +129,7 @@ def generate_mock_report_parquet(
     ])
     
     if output_path:
-        metadata = get_standard_metadata(file_type="REPORT_PARQUET")
+        metadata = get_standard_metadata(file_type="REPORT_PARQUET", source_path=Path.cwd())
         write_parquet_with_metadata(df, output_path, metadata)
         
     return df
@@ -156,8 +156,8 @@ def generate_mock_taxonomy(output_dir: Path):
         "9606\t|\tHomo sapiens\t|\t\t|\tscientific name\t|",
         "10090\t|\tMus musculus\t|\t\t|\tscientific name\t|",
         "5000000\t|\tMockGenus\t|\t\t|\tscientific name\t|",
-        "5000001\t|\tMockSpecies1\t|\t\t|\tscientific name\t|",
-        "5000002\t|\tMockSpecies2\t|\t\t|\tscientific name\t|",
+        "5000001\t|\t5000000\t|\tspecies\t|",
+        "5000002\t|\t5000000\t|\tspecies\t|",
     ]
     
     with open(output_dir / "nodes.dmp", "w") as f:

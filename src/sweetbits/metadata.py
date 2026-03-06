@@ -9,12 +9,22 @@ from sweetbits import __version__
 
 def get_standard_metadata(file_type: str, source_path: Optional[Path] = None) -> Dict[str, str]:
     """Generates the standard metadata dictionary for SweetBITS parquet files."""
+    # Try to detect if we're running via the 'sweetbits' entry point
+    args = sys.argv[1:]
+    command_str = " ".join(args)
+    
+    # If running via python script, include the script name
+    if not sys.argv[0].endswith("sweetbits"):
+        invocation = f"python {sys.argv[0]} {command_str}".strip()
+    else:
+        invocation = f"sweetbits {command_str}".strip()
+
     metadata = {
         "sweetbits_version": __version__,
         "file_type": file_type,
-        "execution_command": f"sweetbits {' '.join(sys.argv[1:])}",
+        "execution_command": invocation,
         "creation_time": datetime.now().isoformat(),
-        "source_path_abs": str(source_path.absolute()) if source_path else "Unknown"
+        "source_path_abs": str(source_path.resolve()) if source_path else "Unknown"
     }
     return metadata
 
