@@ -167,3 +167,19 @@ def generate_mock_taxonomy(output_dir: Path):
     with open(output_dir / "names.dmp", "w") as f:
         for line in names:
             f.write(line + "\n")
+
+def generate_mock_kraken_report_file(output_path: Path):
+    """
+    Generates a mock 8-column Kraken report file.
+    Format: Percentage, Clade reads, Taxon reads, MM_total, MM_uniq, Rank, TaxID, Name
+    """
+    lines = [
+        "100.0\t1000\t0\t5000\t2000\tR\t1\troot",
+        "80.0\t800\t100\t4000\t1500\tD\t2\tBacteria",
+        "20.0\t200\t50\t1000\t500\tD\t2759\tEukaryota",
+        "15.0\t150\t150\t800\t400\tS\t9606\tHomo sapiens",
+        "5.0\t50\t50\t200\t100\tS\t10090\tMus musculus",
+    ]
+    with open(output_path, "w") as f:
+        for line in lines:
+            f.write(line + "\n")
