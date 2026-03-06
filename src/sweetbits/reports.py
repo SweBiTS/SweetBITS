@@ -2,6 +2,7 @@ import polars as pl
 from pathlib import Path
 from typing import List, Optional
 from sweetbits.utils import parse_sample_id
+from sweetbits.metadata import get_standard_metadata, write_parquet_with_metadata
 
 def parse_kraken_report(file_path: Path) -> pl.DataFrame:
     """
@@ -83,5 +84,12 @@ def gather_reports_logic(
     
     merged_df = merged_df.select(final_cols).sort(["year", "week", "sample_id", "t_id"])
     
-    # 4. Save with zstd compression
-    merged_df.write_parquet(output_file, compression="zstd", compression_level=3)
+    # 4. Save with zstd compression and metadata
+    metadata = get_standard_metadata(file_type="REPORT_PARQUET", source_path=input_dir)
+    write_parquet_with_metadata(
+        merged_df, 
+        output_file, 
+        metadata, 
+        compression="zstd", 
+        compression_level=3
+    )

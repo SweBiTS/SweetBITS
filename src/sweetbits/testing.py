@@ -4,6 +4,7 @@ import random
 from typing import Optional
 from pathlib import Path
 from sweetbits.utils import parse_sample_id
+from sweetbits.metadata import get_standard_metadata, write_parquet_with_metadata
 
 def generate_random_dna(length: int) -> str:
     return "".join(random.choice("ACGT") for _ in range(length))
@@ -43,7 +44,6 @@ def generate_mock_kraken_parquet(
         t_id = random.choice([9606, 10090, 5000001, 5000002])
         
         # Mock Kraken k-mer string: "taxid:count taxid:count ..."
-        # Simulating some hits to the t_id and some unclassified (0)
         kmer_string = f"{t_id}:{kmers_lineage} 0:{kmers_total - kmers_lineage}"
         
         data.append({
@@ -90,7 +90,8 @@ def generate_mock_kraken_parquet(
     ])
     
     if output_path:
-        df.write_parquet(output_path)
+        metadata = get_standard_metadata(file_type="KRAKEN_PARQUET")
+        write_parquet_with_metadata(df, output_path, metadata)
     
     return df
 
@@ -128,7 +129,8 @@ def generate_mock_report_parquet(
     ])
     
     if output_path:
-        df.write_parquet(output_path)
+        metadata = get_standard_metadata(file_type="REPORT_PARQUET")
+        write_parquet_with_metadata(df, output_path, metadata)
         
     return df
 
@@ -136,7 +138,6 @@ def generate_mock_taxonomy(output_dir: Path):
     """Generates a minimal NCBITaxonomy-style names.dmp and nodes.dmp."""
     output_dir.mkdir(parents=True, exist_ok=True)
     
-    # nodes.dmp: tax_id | parent_tax_id | rank | ...
     nodes = [
         "1\t|\t1\t|\tno rank\t|",
         "2\t|\t1\t|\tsuperkingdom\t|",
@@ -148,7 +149,6 @@ def generate_mock_taxonomy(output_dir: Path):
         "5000002\t|\t5000000\t|\tspecies\t|",
     ]
     
-    # names.dmp: tax_id | name_txt | unique_name | name_class |
     names = [
         "1\t|\troot\t|\t\t|\tscientific name\t|",
         "2\t|\tBacteria\t|\t\t|\tscientific name\t|",

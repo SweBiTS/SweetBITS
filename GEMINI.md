@@ -27,6 +27,8 @@ Reads are classified using a custom fork of Kraken 2 against a 3TB custom databa
 
 ### 1. `<KRAKEN_PARQUET>`
 A parquet file representing a single sample's read-by-read data, sorted by `t_id`.
+**Metadata:** Must include `sweetbits_version`, `file_type: KRAKEN_PARQUET`, `execution_command`, `creation_time`, and `source_path_abs`.
+
 | Column | Type | Description |
 | :--- | :--- | :--- |
 | `sample_id` | String | The sample ID |
@@ -55,6 +57,7 @@ A parquet file representing a single sample's read-by-read data, sorted by `t_id
 ### 2. `<REPORT_PARQUET>`
 A single long-format parquet file containing merged, relevant counts from multiple report files.
 Sorted by `year`, `week`, `sample_id`, and `t_id`. Compressed with `zstd`.
+**Metadata:** Must include `sweetbits_version`, `file_type: REPORT_PARQUET`, `execution_command`, `creation_time`, and `source_path_abs`.
 
 | Column | Type | Description |
 | :--- | :--- | :--- |
@@ -94,7 +97,8 @@ Merges multiple 8-column Kraken reports into a single Parquet file.
   - Compress with `zstd` (level 3).
   - Extract `sample_id` from filename (base name before all extensions).
   - Validate `sample_id` using `parse_sample_id()`.
-  - Include `source_file` column for provenance.
+  - Include `source_file` column for provenance (relative path).
+  - **Write global Parquet metadata** (version, command, timestamp, absolute input path).
 
 #### `prune_parquet` (Future)
 Reduces columns in `<KRAKEN_PARQUET>` files (e.g., dropping k-mer strings after GBM feature calculation) to save space.
@@ -135,6 +139,13 @@ Amends `<RAW_TABLE>` with JolTax lineage metadata and outputs `<ANNOTATED_TABLE>
 
 #### `to_krona`
 Generates Krona plots from abundance tables. Needs further discussion.
+
+### Inspection Tools
+
+#### `inspect`
+Prints the global metadata stored in a SweetBITS-generated Parquet file.
+- **Inputs:** `<PARQUET_FILE>`
+- **Outputs:** Formatted summary of provenance metadata.
 
 ---
 

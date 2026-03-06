@@ -7,6 +7,7 @@ from datetime import datetime
 from sweetbits import __version__
 from sweetbits.reports import gather_reports_logic
 from sweetbits.tables import generate_table_logic
+from sweetbits.metadata import read_parquet_metadata
 
 def print_header(ctx):
     click.echo(f"Start time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
@@ -91,6 +92,25 @@ def table(input_parquet, output, mode, taxonomy, exclude_samples, min_observed, 
         print_footer(start_time, f"Successfully generated table: {output}")
     except Exception as e:
         click.secho(f"Error: {str(e)}", fg="red", err=True)
+        sys.exit(1)
+
+@main.command(short_help="Show metadata of a SweetBITS parquet file.")
+@click.argument("parquet_file", type=click.Path(exists=True, path_type=Path))
+def inspect(parquet_file):
+    """Prints the global metadata stored in a SweetBITS-generated Parquet file."""
+    try:
+        metadata = read_parquet_metadata(parquet_file)
+        if not metadata:
+            click.echo("No SweetBITS metadata found in this file.")
+            return
+            
+        click.secho(f"File: {parquet_file.name}", fg="cyan", bold=True)
+        click.echo("-" * len(f"File: {parquet_file.name}"))
+        for key, value in metadata.items():
+            display_key = key.replace("_", " ").title()
+            click.echo(f"{display_key:20}: {value}")
+    except Exception as e:
+        click.secho(f"Error reading metadata: {str(e)}", fg="red", err=True)
         sys.exit(1)
 
 if __name__ == "__main__":
