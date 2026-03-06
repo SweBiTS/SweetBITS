@@ -23,18 +23,26 @@ def print_footer(start_time, summary=""):
     click.echo(f"Time elapsed: {elapsed:.2f}s")
     click.echo(f"End time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
 
-@click.group()
+CONTEXT_SETTINGS = dict(help_option_names=['-h', '--help'])
+
+@click.group(context_settings=CONTEXT_SETTINGS)
 def main():
-    """SweetBITS CLI toolkit."""
+    """
+    SweetBITS: Bioinformatics command-line tools for the Swedish Biodiversity 
+    in Time and Space (SweBITS) project.
+    """
     pass
 
-@main.command()
+@main.command(short_help="Merge Kraken reports into a single Parquet file.")
 @click.argument("directory", type=click.Path(exists=True, file_okay=False, path_type=Path))
 @click.option("--output", "-o", type=click.Path(path_type=Path), required=True, help="Path to output Parquet file.")
 @click.option("--recursive/--no-recursive", default=True, help="Search subdirectories (Default: True).")
 @click.option("--include", "-i", default="*.report", help="Pattern to match report files (Default: *.report).")
 def gather_reports(directory, output, recursive, include):
-    """Merges multiple 8-column Kraken reports into a single Parquet file."""
+    """
+    Finds and merges multiple 8-column Kraken reports into a single Polars-optimized 
+    Parquet file, including provenance and temporal metadata.
+    """
     start_time = time.time()
     print_header(click.get_current_context())
     
@@ -50,7 +58,7 @@ def gather_reports(directory, output, recursive, include):
         click.secho(f"Error: {str(e)}", fg="red", err=True)
         sys.exit(1)
 
-@main.command()
+@main.command(short_help="Generate abundance tables from merged reports.")
 @click.argument("input_parquet", type=click.Path(exists=True, path_type=Path))
 @click.option("--output", "-o", type=click.Path(path_type=Path), required=True, help="Path to output file (.csv, .tsv, .parquet).")
 @click.option("--mode", "-m", type=click.Choice(["taxon", "clade", "canonical"]), default="taxon", help="Abundance mode (Default: taxon).")
@@ -61,7 +69,10 @@ def gather_reports(directory, output, recursive, include):
 @click.option("--clade", type=int, help="Filter for taxa rooted at this TaxID.")
 @click.option("--keep-unclassified", is_flag=True, help="Keep TaxID 0 (unclassified).")
 def table(input_parquet, output, mode, taxonomy, exclude_samples, min_observed, min_reads, clade, keep_unclassified):
-    """Outputs abundance tables from a merged report Parquet file."""
+    """
+    Outputs abundance tables with TaxIDs as rows and samples (YYYY_WW) as columns.
+    Supports filtering by clade, minimum occupancy, and read depth.
+    """
     start_time = time.time()
     print_header(click.get_current_context())
     

@@ -106,8 +106,8 @@ Outputs abundance tables with `t_id` as the index and samples (YYYY_WW) as colum
 - **Inputs:** `<REPORT_PARQUET>`
 - **Arguments:**
   - `--mode`: `[taxon, clade, canonical]`
-  - Output file/folder
-  - JolTax cache directory (Required for `--clade` or `canonical`)
+  - `--output FILE`: Path to the output file (Supported: `.csv`, `.tsv`, `.parquet`). Format inferred from suffix.
+  - `--taxonomy DIR`: JolTax cache directory (Required for `--clade` or `canonical`).
 - **Filters (Optional):**
   - `--exclude_samples FILE`: Text file, one ID per line.
   - `--min_observed INT`: Taxon must be in at least INT samples (default: 25).
@@ -115,8 +115,7 @@ Outputs abundance tables with `t_id` as the index and samples (YYYY_WW) as colum
   - `--clade INT`: Output only taxa rooted at this TaxID.
 - **Flags:**
   - `--keep_unclassified`: (Default: False).
-  - `--parquet_output`: (Default: False, outputs CSV otherwise).
-> **AI DIRECTIVE:** Before implementing, prompt the user to discuss output sorting preferences and whether the UX should accept an output file path or a directory path.
+- **Implementation Note:** Sorting is not required for `<RAW_TABLE>`; logical ordering is handled during annotation.
 
 #### `clr`
 Takes `<RAW_TABLE>` (from `table`) and calculates Centered Log Ratio using Bayesian multiplicative replacement for zeroes.
@@ -129,6 +128,9 @@ Streams `<KRAKEN_PARQUET>` to extract reads into FASTQ format with minimal memor
 
 #### `annotate_table`
 Amends `<RAW_TABLE>` with JolTax lineage metadata and outputs `<ANNOTATED_TABLE>`.
+- **Implementation Note:** This tool is responsible for sorting the final output. Preferred strategies:
+  1. Taxonomic hierarchy (Domain -> Species).
+  2. DFS of the taxonomy tree guided by mean/median abundance.
 > **AI DIRECTIVE:** Prompt the user to discuss integration of external metadata (GBIF TP/FP files, sibling reference features, assembly stats, Kraken database minimizers) before coding this tool.
 
 #### `to_krona`
@@ -167,7 +169,7 @@ Generates Krona plots from abundance tables. Needs further discussion.
 
 ### Roadmap
 1. [x] Generate test data (Ljungbyhed sample, 100 reads, mock taxonomy).
-2. [ ] Implement `gather_reports` to merge Kraken reports.
+2. [x] Implement `gather_reports` to merge Kraken reports.
 3. [ ] Implement `table` for abundance matrix generation.
 4. [ ] Implement `extract_reads` for FASTQ streaming.
 5. [ ] TBD...
