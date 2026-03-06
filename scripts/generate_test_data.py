@@ -1,9 +1,14 @@
 from pathlib import Path
-from sweetbits.testing import generate_mock_kraken_parquet, generate_mock_report_parquet
+from sweetbits.testing import generate_mock_kraken_parquet, generate_mock_report_parquet, generate_mock_taxonomy
 
 def main():
     test_data_dir = Path("test_data")
     test_data_dir.mkdir(exist_ok=True)
+    
+    # Generate mock taxonomy
+    taxonomy_dir = test_data_dir / "taxonomy"
+    print(f"Generating mock taxonomy in {taxonomy_dir}...")
+    generate_mock_taxonomy(taxonomy_dir)
     
     sample_id = "Lj-2022_20_001"
     

@@ -40,6 +40,12 @@ def generate_mock_kraken_parquet(
         kmers_lineage = random.randint(kmers_clade, kmers_total - kmers_ambig)
         kmers_misclassified = kmers_total - kmers_ambig - kmers_lineage
         
+        t_id = random.choice([9606, 10090, 5000001, 5000002])
+        
+        # Mock Kraken k-mer string: "taxid:count taxid:count ..."
+        # Simulating some hits to the t_id and some unclassified (0)
+        kmer_string = f"{t_id}:{kmers_lineage} 0:{kmers_total - kmers_lineage}"
+        
         data.append({
             "sample_id": sample_id,
             "year": sample_info["year"],
@@ -52,9 +58,9 @@ def generate_mock_kraken_parquet(
             "r1_len": r1_len,
             "r2_len": r2_len,
             "total_len": total_len,
-            "t_id": random.choice([9606, 10090, 5000001, 5000002]), # Human, Mouse, Mock GTDB
+            "t_id": t_id,
             "mhg": random.randint(1, 10),
-            "kmer_string": "MOCK_KMER_STRING",
+            "kmer_string": kmer_string,
             "kmers_total": kmers_total,
             "kmers_ambig": kmers_ambig,
             "kmers_clade": kmers_clade,
@@ -94,7 +100,8 @@ def generate_mock_report_parquet(
 ) -> pl.DataFrame:
     """Generates mock <REPORT_PARQUET> data."""
     data = []
-    taxids = [9606, 10090, 5000001, 5000002]
+    # Include both species and their parent clades for testing --clade
+    taxids = [9606, 10090, 5000000, 5000001, 5000002]
     
     for sid in sample_ids:
         info = parse_sample_id(sid)
@@ -124,3 +131,39 @@ def generate_mock_report_parquet(
         df.write_parquet(output_path)
         
     return df
+
+def generate_mock_taxonomy(output_dir: Path):
+    """Generates a minimal NCBITaxonomy-style names.dmp and nodes.dmp."""
+    output_dir.mkdir(parents=True, exist_ok=True)
+    
+    # nodes.dmp: tax_id | parent_tax_id | rank | ...
+    nodes = [
+        "1\t|\t1\t|\tno rank\t|",
+        "2\t|\t1\t|\tsuperkingdom\t|",
+        "2759\t|\t1\t|\tsuperkingdom\t|",
+        "9606\t|\t2759\t|\tspecies\t|",
+        "10090\t|\t2759\t|\tspecies\t|",
+        "5000000\t|\t2\t|\tgenus\t|",
+        "5000001\t|\t5000000\t|\tspecies\t|",
+        "5000002\t|\t5000000\t|\tspecies\t|",
+    ]
+    
+    # names.dmp: tax_id | name_txt | unique_name | name_class |
+    names = [
+        "1\t|\troot\t|\t\t|\tscientific name\t|",
+        "2\t|\tBacteria\t|\t\t|\tscientific name\t|",
+        "2759\t|\tEukaryota\t|\t\t|\tscientific name\t|",
+        "9606\t|\tHomo sapiens\t|\t\t|\tscientific name\t|",
+        "10090\t|\tMus musculus\t|\t\t|\tscientific name\t|",
+        "5000000\t|\tMockGenus\t|\t\t|\tscientific name\t|",
+        "5000001\t|\tMockSpecies1\t|\t\t|\tscientific name\t|",
+        "5000002\t|\tMockSpecies2\t|\t\t|\tscientific name\t|",
+    ]
+    
+    with open(output_dir / "nodes.dmp", "w") as f:
+        for line in nodes:
+            f.write(line + "\n")
+            
+    with open(output_dir / "names.dmp", "w") as f:
+        for line in names:
+            f.write(line + "\n")
