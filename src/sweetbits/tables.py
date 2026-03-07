@@ -35,31 +35,31 @@ def generate_table_logic(
     filtering by clade, sample exclusion, and quality thresholds.
 
     Args:
-        input_parquet: Path to the merged REPORT_PARQUET file.
-        output_file: Path where the table will be saved (.csv, .tsv, or .parquet).
-        mode: Abundance calculation mode:
-            - 'taxon': Raw reads assigned directly to a TaxID.
-            - 'clade': Cumulative reads for a taxon and all descendants (redundant).
-            - 'canonical': Canonical remainders. Essentially taxon mode but where reads 
-                           between canonical ranks have been pushed up to the nearest 
-                           canonical ancestor (NCA). Ensures mass balance.
-        taxonomy_dir: Path to JolTax cache directory (required for 'canonical' or clade filter).
-        exclude_samples: Optional path to a text file containing Sample IDs to exclude.
-        min_observed: Minimum number of samples a taxon must appear in.
-        min_reads: Minimum maximum read count across all samples for a taxon.
-        clade_filter: Optional TaxID to restrict output to a specific clade.
-        keep_unclassified: Whether to include TaxID 0 in the output.
+        input_parquet     : Path to the merged REPORT_PARQUET file.
+        output_file       : Path where the table will be saved (.csv, .tsv, or .parquet).
+        mode              : Abundance calculation mode:
+                            - 'taxon': Raw reads assigned directly to a TaxID.
+                            - 'clade': Cumulative reads for a taxon and all descendants.
+                            - 'canonical': Canonical remainders. Essentially taxon mode but where 
+                                           reads between canonical ranks have been pushed up to 
+                                           the nearest canonical ancestor (NCA). Ensures mass balance.
+        taxonomy_dir      : Path to JolTax cache directory (required for 'canonical' or clade filter).
+        exclude_samples   : Optional path to a text file containing Sample IDs to exclude.
+        min_observed      : Minimum number of samples a taxon must appear in.
+        min_reads         : Minimum maximum read count across all samples for a taxon.
+        clade_filter      : Optional TaxID to restrict output to a specific clade.
+        keep_unclassified : Whether to include TaxID 0 in the output.
 
     Returns:
         A dictionary containing processing statistics:
-        - 'data_standard': Detected standard (SWEBITS/GENERIC).
-        - 'active_samples': Number of samples included in the output.
-        - 'rows_output': Number of taxa in the final table.
-        - 'output_file': Path to the saved result.
+        - 'data_standard'  : Detected standard (SWEBITS/GENERIC).
+        - 'active_samples' : Number of samples included in the output.
+        - 'rows_output'    : Number of taxa in the final table.
+        - 'output_file'    : Path to the saved result.
 
     Raises:
-        ValueError: If required parameters (like taxonomy_dir) are missing for the selected mode.
-        FileNotFoundError: If the input file does not exist.
+        ValueError        : If required parameters are missing for the selected mode.
+        FileNotFoundError : If the input file does not exist.
     """
     # 1. Read Metadata and Initialize LazyFrame
     metadata = read_parquet_metadata(input_parquet)
