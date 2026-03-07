@@ -90,10 +90,10 @@ def generate_mock_kraken_parquet(
     ])
     
     if output_path:
-        # Use output_path as source_path to record absolute file path
+        # Simulate that raw data was in a 'raw_data' folder
         metadata = get_standard_metadata(
             file_type="KRAKEN_PARQUET", 
-            source_path=output_path,
+            source_path=Path.cwd() / "raw_data",
             compression="Uncompressed (Snappy default)",
             sorting="t_id"
         )
@@ -137,7 +137,7 @@ def generate_mock_report_parquet(
     if output_path:
         metadata = get_standard_metadata(
             file_type="REPORT_PARQUET", 
-            source_path=Path.cwd(),
+            source_path=Path.cwd() / "reports",
             compression="Uncompressed (Snappy default)",
             sorting="year, week, sample_id, t_id"
         )

@@ -28,23 +28,13 @@ def get_standard_metadata(
         "execution_command": invocation,
         "creation_time": datetime.now().isoformat(),
         "compression": compression,
-        "sorting": sorting
+        "sorting": sorting,
+        "source_path_abs": str(source_path.resolve()) if source_path else "Unknown"
     }
-    
-    if file_type == "KRAKEN_PARQUET":
-        # For single sample files, we'll set this when writing or use current dir
-        metadata["file_path_abs"] = str(source_path.absolute()) if source_path else "Unknown"
-    else:
-        metadata["source_path_abs"] = str(source_path.absolute()) if source_path else "Unknown"
-        
     return metadata
 
 def write_parquet_with_metadata(df: 'pl.DataFrame', output_path: Path, metadata: Dict[str, str], **kwargs):
     """Writes a Polars DataFrame to Parquet with custom file-level metadata."""
-    # Ensure absolute path is recorded for KRAKEN_PARQUET if not provided
-    if metadata.get("file_type") == "KRAKEN_PARQUET" and metadata.get("file_path_abs") == "Unknown":
-        metadata["file_path_abs"] = str(output_path.absolute())
-
     table = df.to_arrow()
     existing_meta = table.schema.metadata or {}
     merged_meta = {**existing_meta}
