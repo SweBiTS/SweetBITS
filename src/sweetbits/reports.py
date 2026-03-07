@@ -12,6 +12,19 @@ from sweetbits.metadata import get_standard_metadata, write_parquet_with_metadat
 def detect_report_format(file_path: Path) -> str:
     """
     Sniffs the first line of a Kraken report to determine its format.
+
+    This function distinguishes between the standard Kraken 2 output (6 columns)
+    and the updated format used in this project (8 columns) which includes 
+    HyperLogLog-based minimizer metrics.
+
+    Args:
+        file_path: Path to the Kraken report file.
+
+    Returns:
+        'HYPERLOGLOG' for 8-column files, 'LEGACY' for 6-column files.
+
+    Raises:
+        ValueError: If the file is empty or contains an unsupported number of columns.
     """
     with open(file_path, "r") as f:
         first_line = f.readline()
@@ -29,6 +42,16 @@ def detect_report_format(file_path: Path) -> str:
 def parse_kraken_report(file_path: Path, report_format: str) -> pl.DataFrame:
     """
     Parses a Kraken report file into a Polars DataFrame based on its format.
+
+    Only essential columns required for abundance matrices and downstream 
+    quality analysis are kept.
+
+    Args:
+        file_path: Path to the raw report text file.
+        report_format: Either 'HYPERLOGLOG' or 'LEGACY'.
+
+    Returns:
+        A Polars DataFrame containing the extracted taxonomic and read data.
     """
     if report_format == "HYPERLOGLOG":
         schema = {
@@ -64,7 +87,32 @@ def gather_reports_logic(
 ) -> Dict[str, Any]:
     """
     Finds and merges Kraken report files into a single long-format Parquet file.
-    Returns summary metadata about the merge process.
+
+    The process automatically detects two distinct profiles:
+    1. Report Format: Differentiates between 'HYPERLOGLOG' (8-col) and 'LEGACY' (6-col).
+       All files in a batch must be consistent.
+    2. Data Standard: Differentiates between 'SWEBITS' (based on filename pattern) 
+       and 'GENERIC'. SweBITS files include extra 'year' and 'week' columns.
+
+    The final Parquet file is sorted for high-performance range queries and contains
+    comprehensive Arrow-level metadata for provenance tracking.
+
+    Args:
+        input_dir: Directory to scan for report files.
+        output_file: Path to the output Parquet file.
+        recursive: Whether to search subdirectories. Defaults to True.
+        include_pattern: Glob pattern to match files. Defaults to "*.report".
+
+    Returns:
+        A dictionary containing processing statistics:
+        - 'report_format': The detected format (HYPERLOGLOG/LEGACY).
+        - 'data_standard': The detected standard (SWEBITS/GENERIC).
+        - 'files_merged': Count of files processed.
+        - 'total_rows': Total row count in the resulting Parquet.
+
+    Raises:
+        FileNotFoundError: If no files are found matching the pattern.
+        ValueError: If mixed report formats are detected in the same batch.
     """
     search_path = "**/" + include_pattern if recursive else include_pattern
     report_files = list(input_dir.glob(search_path))
@@ -121,7 +169,7 @@ def gather_reports_logic(
     sort_keys = ["year", "week", "sample_id", "t_id"] if is_swebits else ["sample_id", "t_id"]
     merged_df = merged_df.sort(sort_keys)
     
-    # 5. Save with comprehensive Metadata
+    # 5. Save with Metadata
     metadata = get_standard_metadata(
         file_type="REPORT_PARQUET", 
         source_path=input_dir,

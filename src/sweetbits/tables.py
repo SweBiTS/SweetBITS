@@ -31,12 +31,18 @@ def generate_table_logic(
     Generates a wide-format abundance table from a merged REPORT_PARQUET file.
 
     This function automatically detects the 'data_standard' from the input file's
-    metadata to decide how to format columns (YYYY_WW vs Sample ID).
+    metadata to decide how to format columns (YYYY_WW vs Sample ID). It supports
+    filtering by clade, sample exclusion, and quality thresholds.
 
     Args:
         input_parquet: Path to the merged REPORT_PARQUET file.
         output_file: Path where the table will be saved (.csv, .tsv, or .parquet).
-        mode: Abundance calculation mode ('taxon', 'clade', 'canonical').
+        mode: Abundance calculation mode:
+            - 'taxon': Raw reads assigned directly to a TaxID.
+            - 'clade': Cumulative reads for a taxon and all descendants (redundant).
+            - 'canonical': Canonical remainders. Essentially taxon mode but where reads 
+                           between canonical ranks have been pushed up to the nearest 
+                           canonical ancestor (NCA). Ensures mass balance.
         taxonomy_dir: Path to JolTax cache directory (required for 'canonical' or clade filter).
         exclude_samples: Optional path to a text file containing Sample IDs to exclude.
         min_observed: Minimum number of samples a taxon must appear in.
@@ -45,7 +51,15 @@ def generate_table_logic(
         keep_unclassified: Whether to include TaxID 0 in the output.
 
     Returns:
-        A summary dictionary containing operation results.
+        A dictionary containing processing statistics:
+        - 'data_standard': Detected standard (SWEBITS/GENERIC).
+        - 'active_samples': Number of samples included in the output.
+        - 'rows_output': Number of taxa in the final table.
+        - 'output_file': Path to the saved result.
+
+    Raises:
+        ValueError: If required parameters (like taxonomy_dir) are missing for the selected mode.
+        FileNotFoundError: If the input file does not exist.
     """
     # 1. Read Metadata and Initialize LazyFrame
     metadata = read_parquet_metadata(input_parquet)
