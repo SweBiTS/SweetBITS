@@ -38,7 +38,7 @@ def parse_kraken_report(file_path: Path, report_format: str) -> pl.DataFrame:
     """
     if report_format == "HYPERLOGLOG":
         schema = {
-            "column_1": pl.Float64, "column_2": pl.UInt32, "column_3": pl.UInt32,
+            "column_1": pl.Float32, "column_2": pl.UInt32, "column_3": pl.UInt32,
             "column_4": pl.UInt64, "column_5": pl.UInt32, "column_6": pl.String,
             "column_7": pl.UInt32, "column_8": pl.String,
         }
@@ -46,7 +46,7 @@ def parse_kraken_report(file_path: Path, report_format: str) -> pl.DataFrame:
         keep_cols = ["clade_reads", "taxon_reads", "mm_tot", "mm_uniq", "t_id"]
     else: # LEGACY
         schema = {
-            "column_1": pl.Float64, "column_2": pl.UInt32, "column_3": pl.UInt32,
+            "column_1": pl.Float32, "column_2": pl.UInt32, "column_3": pl.UInt32,
             "column_4": pl.String, "column_5": pl.UInt32, "column_6": pl.String,
         }
         new_names = ["pct", "clade_reads", "taxon_reads", "rank", "t_id", "name"]
