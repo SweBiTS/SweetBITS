@@ -190,8 +190,12 @@ Takes `<RAW_TABLE>` (from `table`) and calculates Centered Log Ratio using Bayes
 > **AI DIRECTIVE:** Before implementing, ask the user how to handle taxa with extremely high proportions of zeroes.
 
 #### `extract_reads`
-Streams `<KRAKEN_PARQUET>` to extract reads into FASTQ format with minimal memory footprint.
+Streams `<KRAKEN_PARQUET>` to extract reads into FASTQ format with high throughput and a constant memory profile.
 - **Inputs:** `<KRAKEN_PARQUET>` file or directory.
+- **Performance Features:**
+    - **Vectorized Writes:** Pre-compiles FASTQ records into binary byte-blocks for maximum I/O throughput.
+    - **Memory Chunking:** Processes large taxon groups in 50,000-read slices to prevent RAM spikes (OOM safety).
+    - **Handle Management:** Uses an LRU (Least Recently Used) cache for file handles to prevent "Too many open files" OS errors.
 - **Arguments:**
   - `--taxonomy DIR`: JolTax cache directory (Required).
   - `--tax_id LIST`: Comma-separated TaxIDs to extract.
@@ -226,6 +230,18 @@ Generates Krona plots from abundance tables. Needs further discussion.
 Prints the global metadata stored in a SweetBITS-generated Parquet file.
 - **Inputs:** `<PARQUET_FILE>`
 - **Outputs:** Formatted summary of provenance metadata.
+
+---
+
+## Data Integrity & Validation
+
+### Parquet Metadata Contract
+All SweetBITS tools that read `<KRAKEN_PARQUET>` or `<REPORT_PARQUET>` files must strictly validate the input using `validate_sweetbits_parquet()`.
+- **Requirements:**
+    - Must contain `sweetbits_version`.
+    - Must match the expected `file_type`.
+    - Must contain all required columns for the specific operation.
+- **Failure:** Tools must raise a clear `ValueError` explaining the mismatch to prevent processing of incompatible or non-toolkit data.
 
 ---
 
@@ -265,5 +281,6 @@ Prints the global metadata stored in a SweetBITS-generated Parquet file.
 2. [x] Implement `gather_reports` to merge Kraken reports.
 3. [x] Implement `table` for abundance matrix generation.
 4. [x] Implement `extract_reads` for FASTQ streaming.
-5. [ ] Implement `annotate_table` for taxonomic annotation and sorting.
-6. [ ] TBD...
+5. [x] Implement `inspect` for metadata viewing.
+6. [ ] Implement `annotate_table` for taxonomic annotation and sorting.
+7. [ ] TBD...
