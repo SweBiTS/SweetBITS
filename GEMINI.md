@@ -11,8 +11,9 @@ SweBITS pioneers metagenomic shotgun sequencing of archived air filters from two
 - **Reference Publication:** https://www.nature.com/articles/s41467-025-67676-7
 
 #### Datasets
-- **Kiruna:** ~380 samples (1974-2014, mostly even-numbered years). Heterogeneous summer weeks. Sample ID format: `Ki-YYYY_WW_ZZZ`.
-- **Ljungbyhed:** ~520 samples (2013-2022). Weekly coverage. Sample ID format: `Lj-YYYY_WW_ZZZ`.
+- **Kiruna:** ~380 samples (1974-2014, mostly even-numbered years). Heterogeneous summer weeks. Sample ID format: `Ki-YYYY_WW_ZZZ` (where ZZZ is 1-3 digits).
+- **Ljungbyhed:** ~520 samples (2013-2022). Weekly coverage. Sample ID format: `Lj-YYYY_WW_ZZZ` (where ZZZ is 1-3 digits).
+- **Generalization:** Supports both `_` and `-` as separators between all components (e.g., `Ki-2022-01-001`).
 
 #### Taxonomic Classification
 Reads are classified using a custom fork of Kraken 2 against a 3TB custom database (mixed NCBI/GTDB taxonomy, where Bacteria/Archaea TaxIDs increment from 5,000,000). 
