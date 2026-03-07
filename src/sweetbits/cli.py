@@ -29,6 +29,8 @@ def print_footer(start_time, summary_dict=None):
     elapsed = time.time() - start_time
     click.echo("-" * 60, err=True)
     if summary_dict:
+        # Sort keys to ensure 'Status' or specific order if desired, 
+        # but iterating naturally is fine.
         for k, v in summary_dict.items():
             label = k.replace("_", " ").title()
             click.echo(f"{label:20}: {v}", err=True)
@@ -76,7 +78,7 @@ def gather_reports(directory, output, recursive, include):
 @main.command(short_help="Generate abundance tables from merged reports.")
 @click.argument("input_parquet", type=click.Path(exists=True, path_type=Path))
 @click.option("--output", "-o", type=click.Path(path_type=Path), required=True, help="Path to output file (.csv, .tsv, .parquet).")
-@click.option("--mode", "-m", type=click.Choice(["taxon", "clade", "canonical"]), default="taxon", help="Abundance mode (Default: taxon).")
+@click.option("--mode", "-m", type=click.Choice(["taxon", "clade", "canonical"]), default="clade", help="Abundance mode (Default: clade).")
 @click.option("--taxonomy", "-t", type=click.Path(path_type=Path), help="JolTax cache directory.")
 @click.option("--exclude-samples", type=click.Path(exists=True, path_type=Path), help="File with sample IDs to exclude.")
 @click.option("--min-observed", type=int, default=25, help="Minimum samples taxon must be in (Default: 25).")
@@ -105,6 +107,7 @@ def table(input_parquet, output, mode, taxonomy, exclude_samples, min_observed, 
             clade_filter=clade,
             keep_unclassified=keep_unclassified
         )
+        summary["status"] = "Success"
         print_footer(start_time, summary)
     except Exception as e:
         click.secho(f"Error: {str(e)}", fg="red", err=True)
@@ -151,12 +154,8 @@ def extract_reads(input_path, taxonomy, tax_id, output_dir, mode, combine_sample
             year_end=year_end,
             week_end=week_end
         )
-        footer_msg = {
-            "samples_processed": summary['samples_processed'],
-            "reads_extracted": summary['reads_extracted'],
-            "output_directory": str(summary['output_dir'])
-        }
-        print_footer(start_time, footer_msg)
+        summary["status"] = "Success"
+        print_footer(start_time, summary)
     except Exception as e:
         click.secho(f"Error: {str(e)}", fg="red", err=True)
         sys.exit(1)

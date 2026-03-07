@@ -122,3 +122,5 @@ cython_debug/
 *.parquet
 *.report
 *.kraken2
+test_data/
+test_output/
