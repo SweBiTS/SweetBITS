@@ -1,15 +1,26 @@
+"""
+sweetbits.reads
+Logic for streaming and extracting reads from Kraken-annotated Parquet files.
+"""
+
 import polars as pl
 import gzip
 from pathlib import Path
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, IO, Tuple
+from collections import OrderedDict
 from joltax import JolTree
 from sweetbits.utils import parse_sample_id
+from sweetbits.metadata import validate_sweetbits_parquet
 
 def format_short_name(scientific_name: str) -> str:
     """
     Formats a scientific name into a ShortName tag.
-    - If >1 word: HomSap (first two words, 3 chars each, PascalCase)
-    - If 1 word: Use whole word.
+
+    Args:
+        scientific_name : The full scientific name string.
+
+    Returns:
+        A condensed string (e.g., 'HomSap' for 'Homo sapiens').
     """
     words = scientific_name.split()
     if len(words) > 1:
@@ -27,7 +38,20 @@ def is_in_temporal_range(
     year_end: Optional[int] = None, 
     week_end: Optional[int] = None
 ) -> bool:
-    """Checks if a (year, week) falls within the specified range."""
+    """
+    Checks if a (year, week) falls within the specified range.
+
+    Args:
+        year       : The ISO year to check.
+        week       : The ISO week to check.
+        year_start : Optional start year filter.
+        week_start : Optional start week filter.
+        year_end   : Optional end year filter.
+        week_end   : Optional end week filter.
+
+    Returns:
+        True if the point is within the inclusive interval.
+    """
     current = (year, week)
     if year_start is not None:
         start = (year_start, week_start if week_start is not None else 0)
@@ -37,9 +61,38 @@ def is_in_temporal_range(
         if current > end: return False
     return True
 
-def write_fastq_record(file_handle, read_id, seq, qual):
-    """Writes a single FASTQ record to the handle."""
-    file_handle.write(f"@{read_id}\n{seq}\n+\n{qual}\n".encode())
+class FastqHandleManager:
+    """
+    Manages open GZIP handles using an LRU cache strategy.
+    
+    This prevents 'Too many open files' OS errors while minimizing the 
+    overhead of opening/closing gzip streams for common targets.
+    """
+    def __init__(self, output_dir: Path, max_handles: int = 400):
+        self.output_dir = output_dir
+        self.max_handles = max_handles
+        self.handles: OrderedDict[str, IO] = OrderedDict()
+
+    def get_handle(self, name: str) -> IO:
+        """Retrieves an open handle, opening it if necessary and enforcing limits."""
+        if name in self.handles:
+            self.handles.move_to_end(name)
+            return self.handles[name]
+        
+        # Enforce OS file limit by closing the Least Recently Used handle
+        if len(self.handles) >= self.max_handles:
+            _, oldest_handle = self.handles.popitem(last=False)
+            oldest_handle.close()
+            
+        handle = gzip.open(self.output_dir / f"{name}.fastq.gz", "ab")
+        self.handles[name] = handle
+        return handle
+
+    def close_all(self):
+        """Closes all currently open handles."""
+        for h in self.handles.values():
+            h.close()
+        self.handles.clear()
 
 def extract_reads_logic(
     input_path: Path,
@@ -55,32 +108,47 @@ def extract_reads_logic(
 ) -> Dict[str, Any]:
     """
     Streams KRAKEN_PARQUET files and extracts reads into FASTQ format.
+
+    Args:
+        input_path      : Path to a single Parquet file or a directory of files.
+        taxonomy_dir    : Path to the JolTax cache directory.
+        tax_ids         : List of TaxIDs to extract reads for.
+        output_dir      : Directory where FASTQ.gz files will be saved.
+        mode            : Extraction mode ('taxon' or 'clade').
+        combine_samples : Whether to merge reads from all samples into one file per TaxID.
+        year_start      : Optional start year for filtering.
+        week_start      : Optional start week for filtering.
+        year_end        : Optional end year for filtering.
+        week_end        : Optional end week for filtering.
+
+    Returns:
+        A dictionary containing extraction statistics.
     """
     # 1. Setup
     tree = JolTree.load(str(taxonomy_dir))
     output_dir.mkdir(parents=True, exist_ok=True)
+    handle_manager = FastqHandleManager(output_dir)
     
-    # Discovery
     if input_path.is_dir():
-        parquet_files = list(input_path.glob("*.parquet"))
+        parquet_files = sorted(list(input_path.glob("*.parquet")))
     else:
         parquet_files = [input_path]
         
     if not parquet_files:
         raise FileNotFoundError(f"No parquet files found at {input_path}")
 
-    # Resolve Taxon Metadata
-    taxon_info = {}
+    # Map requested TaxIDs to their metadata and clade members
+    taxon_meta = {}
+    all_target_tids = set()
     for tid in tax_ids:
         name = tree.get_name(tid, strict=False) or f"Unknown{tid}"
-        taxon_info[tid] = {
-            "name": name,
+        members = set(tree.get_clade(tid)) if mode == "clade" else {tid}
+        taxon_meta[tid] = {
             "short_name": format_short_name(name),
-            "clade_members": set(tree.get_clade(tid)) if mode == "clade" else {tid}
+            "members": members
         }
+        all_target_tids.update(members)
 
-    # Combined File Handles (if active)
-    combined_handles = {}
     range_tag = ""
     if combine_samples and (year_start or year_end):
         ys = year_start or "Start"
@@ -92,84 +160,96 @@ def extract_reads_logic(
     # 2. Processing
     total_reads_extracted = 0
     samples_processed = 0
+    required_cols = ["sample_id", "read_id", "r1_seq", "r1_qual", "r2_seq", "r2_qual", "t_id", "year", "week"]
     
     try:
         for pfile in parquet_files:
-            # Quick check of sample metadata before reading full file
-            # Most SweBITS files have sample_id in the name
-            sample_id = pfile.name.split('.')[0]
+            # FAST-FAIL: Quick filename-based temporal check before scanning Parquet
+            sample_id_guess = pfile.name.split('.')[0]
             try:
-                info = parse_sample_id(sample_id)
+                info = parse_sample_id(sample_id_guess)
                 if not is_in_temporal_range(info['year'], info['week'], year_start, week_start, year_end, week_end):
                     continue
             except ValueError:
-                # If filename parsing fails, we'll check inside the file
-                pass
+                pass # Not a SweBITS filename, proceed to scan
 
-            # Stream the file
+            # Validate metadata and columns
+            metadata = validate_sweetbits_parquet(pfile, expected_type="KRAKEN_PARQUET", required_columns=required_cols)
+            data_standard = metadata.get("data_standard", "GENERIC")
+
+            # Stream matching records
             lf = pl.scan_parquet(pfile)
-            
-            # Apply Temporal Filter inside Polars if possible
-            if year_start:
-                lf = lf.filter(pl.col("year") >= year_start)
-                # Note: Exact (year, week) interval is harder in pure Polars filter 
-                # without complex logic, but we'll filter more precisely in the loop.
-
-            # Filter for requested taxa
-            all_target_tids = set()
-            for tid in tax_ids:
-                all_target_tids.update(taxon_info[tid]["clade_members"])
-            
             lf = lf.filter(pl.col("t_id").is_in(list(all_target_tids)))
             
-            # Execute stream
+            # Apply temporal filters at scan level for SWEBITS standard
+            if data_standard == "SWEBITS":
+                if year_start: lf = lf.filter(pl.col("year") >= year_start)
+                if year_end:   lf = lf.filter(pl.col("year") <= year_end)
+            
             df = lf.collect(streaming=True)
             if df.is_empty():
                 continue
                 
             samples_processed += 1
             
-            # Group by sample_id and t_id for file management
+            # Group by Sample and TaxID
             for (sid, tid_internal), group in df.group_by(["sample_id", "t_id"]):
-                # Precise temporal check for this specific sample record
-                row = group.row(0, named=True)
-                if not is_in_temporal_range(row['year'], row['week'], year_start, week_start, year_end, week_end):
-                    continue
+                # Final precise temporal check
+                if data_standard == "SWEBITS":
+                    row_meta = group.row(0, named=True)
+                    if not is_in_temporal_range(row_meta['year'], row_meta['week'], year_start, week_start, year_end, week_end):
+                        continue
                 
-                # Determine which requested TaxID this hit belongs to
-                for requested_tid in tax_ids:
-                    if tid_internal in taxon_info[requested_tid]["clade_members"]:
-                        tmeta = taxon_info[requested_tid]
+                # Identify every requested clade that this TaxID belongs to
+                matching_requests = [
+                    req_tid for req_tid in tax_ids 
+                    if tid_internal in taxon_meta[req_tid]["members"]
+                ]
+                
+                if not matching_requests:
+                    continue
+
+                # MEMORY SAFEGUARD: Process massive groups in chunks of 50,000 reads.
+                # This prevents OOM errors on highly abundant taxa while maintaining
+                # high-throughput vectorized byte-block writing.
+                CHUNK_SIZE = 50_000
+                for chunk in group.iter_slices(CHUNK_SIZE):
+                    # PERFORMANCE: Pre-compile FASTQ strings into binary byte-blocks.
+                    records = list(zip(
+                        chunk["read_id"].to_list(),
+                        chunk["r1_seq"].to_list(),
+                        chunk["r1_qual"].to_list(),
+                        chunk["r2_seq"].to_list(),
+                        chunk["r2_qual"].to_list()
+                    ))
+                    
+                    block_r1 = "".join([f"@{rid}\n{r1s}\n+\n{r1q}\n" for rid, r1s, r1q, r2s, r2q in records]).encode()
+                    block_r2 = "".join([f"@{rid}\n{r2s}\n+\n{r2q}\n" for rid, r1s, r1q, r2s, r2q in records]).encode()
+                    num_reads_in_chunk = len(records)
+
+                    for requested_tid in matching_requests:
+                        tmeta = taxon_meta[requested_tid]
                         
-                        # Get or create handles
+                        # Generate base filename
                         if combine_samples:
-                            handle_key = requested_tid
-                            if handle_key not in combined_handles:
-                                fname_base = f"combined_{mode}_{requested_tid}_{tmeta['short_name']}{range_tag}"
-                                combined_handles[handle_key] = (
-                                    gzip.open(output_dir / f"{fname_base}_R1.fastq.gz", "ab"),
-                                    gzip.open(output_dir / f"{fname_base}_R2.fastq.gz", "ab")
-                                )
-                            h1, h2 = combined_handles[handle_key]
+                            fname_base = f"combined_{mode}_{requested_tid}_{tmeta['short_name']}{range_tag}"
                         else:
                             fname_base = f"{sid}_{mode}_{requested_tid}_{tmeta['short_name']}"
-                            h1 = gzip.open(output_dir / f"{fname_base}_R1.fastq.gz", "ab")
-                            h2 = gzip.open(output_dir / f"{fname_base}_R2.fastq.gz", "ab")
-
-                        # Write reads
-                        for read in group.iter_rows(named=True):
-                            write_fastq_record(h1, read['read_id'], read['r1_seq'], read['r1_qual'])
-                            write_fastq_record(h2, read['read_id'], read['r2_seq'], read['r2_qual'])
-                            total_reads_extracted += 1
                         
-                        if not combine_samples:
-                            h1.close()
-                            h2.close()
+                        h1 = handle_manager.get_handle(f"{fname_base}_R1")
+                        h2 = handle_manager.get_handle(f"{fname_base}_R2")
+
+                        # Write the pre-compiled blocks instantly
+                        h1.write(block_r1)
+                        h2.write(block_r2)
+                        total_reads_extracted += num_reads_in_chunk
+            
+            # If not combining, close handles after each sample to keep resources tight
+            if not combine_samples:
+                handle_manager.close_all()
 
     finally:
-        for h1, h2 in combined_handles.values():
-            h1.close()
-            h2.close()
+        handle_manager.close_all()
 
     return {
         "samples_processed": samples_processed,

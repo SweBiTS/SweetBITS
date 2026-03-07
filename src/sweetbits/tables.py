@@ -12,7 +12,7 @@ from typing import Optional, List, Union, Dict, Any
 from joltax import JolTree
 from joltax.constants import CANONICAL_RANKS
 from sweetbits.utils import parse_sample_id, load_sample_id_list
-from sweetbits.metadata import get_standard_metadata, write_parquet_with_metadata, read_parquet_metadata
+from sweetbits.metadata import get_standard_metadata, write_parquet_with_metadata, read_parquet_metadata, validate_sweetbits_parquet
 
 logger = logging.getLogger(__name__)
 
@@ -227,8 +227,9 @@ def generate_table_logic(
         ValueError        : If required parameters are missing for the selected mode.
         FileNotFoundError : If the input file does not exist.
     """
-    # 1. Read Metadata and Initialize LazyFrame
-    metadata = read_parquet_metadata(input_parquet)
+    # 1. Validate Parquet and Read Metadata
+    required_cols = ["sample_id", "t_id", "clade_reads", "taxon_reads"]
+    metadata = validate_sweetbits_parquet(input_parquet, expected_type="REPORT_PARQUET", required_columns=required_cols)
     data_standard = metadata.get("data_standard", "GENERIC")
     
     lf = pl.scan_parquet(input_parquet)
