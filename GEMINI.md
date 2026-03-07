@@ -179,6 +179,8 @@ Outputs abundance tables with `t_id` as the index and samples (YYYY_WW) as colum
   - `canonical`: **Canonical Remainders**. Essentially taxon mode but where reads between canonical ranks have been pushed up to the nearest canonical ancestor (NCA). This eliminates double-counting while conserving mass balance.
     - Uses `clade_reads` as input.
     - Identifies the Nearest Canonical Ancestor (NCA) for every node.
+    - **Non-canonical rank skipping:** Automatically "skips" non-canonical ranks (e.g., subspecies, subgenus) to attribute reads to the nearest standard parent (Canonical Rank Read Standardization).
+    - **Strict Validation:** If a `--clade` filter is used, the provided TaxID MUST belong to a standard canonical rank (Species, Genus, etc.).
     - Subtracts the sum of all canonical child clades from the parent's clade count.
     - Corrects for "skipped ranks" and non-canonical assignments (e.g., `subgenus`).
     - The sum of all remainders in a sample exactly equals the total reads.
