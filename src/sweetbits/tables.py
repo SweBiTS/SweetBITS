@@ -235,9 +235,12 @@ def generate_table_logic(
     lf = pl.scan_parquet(input_parquet)
     
     # 2. Filtering Samples
+    # Execute ONE quick scan of just the sample IDs to power validation and math
+    existing_samples_df = lf.select("sample_id").unique().collect()
+    all_ids = set(existing_samples_df["sample_id"].to_list())
+    
     if exclude_samples:
         excluded_ids = load_sample_id_list(exclude_samples)
-        all_ids = set(lf.select("sample_id").unique().collect()["sample_id"].to_list())
         phantom_ids = [eid for eid in excluded_ids if eid not in all_ids]
         
         if phantom_ids:
@@ -247,8 +250,11 @@ def generate_table_logic(
             )
         lf = lf.filter(~pl.col("sample_id").is_in(excluded_ids))
         
-    active_samples = lf.select("sample_id").unique().collect().height
-    
+        # Calculate active samples mathematically without reading the file a second time
+        active_samples = len(all_ids) - (len(excluded_ids) - len(phantom_ids))
+    else:
+        active_samples = len(all_ids)
+        
     if min_observed > (active_samples / 2) and active_samples > 0:
         click.secho(
             f"Warning: --min-observed ({min_observed}) is more than 50% of active samples ({active_samples}).", 
@@ -321,11 +327,15 @@ def generate_table_logic(
     sample_cols = [c for c in table.columns if c != "t_id"]
     if sample_cols:
         if min_observed > 0:
-            obs_count = table.select([pl.sum_horizontal([pl.col(c) > 0 for c in sample_cols]).alias("count")])["count"]
-            table = table.filter(obs_count >= min_observed)
+            # Idiomatic Polars: evaluate directly inside the filter context
+            table = table.filter(
+                pl.sum_horizontal([(pl.col(c) > 0) for c in sample_cols]) >= min_observed
+            )
+            
         if min_reads > 0:
-            max_reads = table.select([pl.max_horizontal(sample_cols).alias("max_val")])["max_val"]
-            table = table.filter(max_reads >= min_reads)
+            table = table.filter(
+                pl.max_horizontal(sample_cols) >= min_reads
+            )
         
     # 7. Output Generation
     ext = output_file.suffix.lower()
