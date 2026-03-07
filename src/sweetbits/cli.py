@@ -9,6 +9,7 @@ from sweetbits.reports import gather_reports_logic
 from sweetbits.tables import generate_table_logic
 from sweetbits.metadata import read_parquet_metadata
 from sweetbits.reads import extract_reads_logic
+from sweetbits.annotate import annotate_table_logic
 
 def print_header(ctx):
     now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
@@ -153,6 +154,35 @@ def extract_reads(input_path, taxonomy, tax_id, output_dir, mode, combine_sample
             week_start=week_start,
             year_end=year_end,
             week_end=week_end
+        )
+        summary["status"] = "Success"
+        print_footer(start_time, summary)
+    except Exception as e:
+        click.secho(f"Error: {str(e)}", fg="red", err=True)
+        sys.exit(1)
+
+@main.command(short_help="Annotate a raw abundance table with taxonomy and metadata.")
+@click.argument("input_table", type=click.Path(exists=True, path_type=Path))
+@click.option("--taxonomy", "-t", type=click.Path(exists=True, path_type=Path), required=True, help="JolTax cache directory.")
+@click.option("--output", "-o", type=click.Path(path_type=Path), required=True, help="Path to output file (.csv, .tsv, .parquet).")
+@click.option("--metadata", "-m", type=click.Path(exists=True, path_type=Path), multiple=True, help="Path to external metadata files (can be used multiple times).")
+def annotate_table(input_table, taxonomy, output, metadata):
+    """
+    Annotates a numeric <RAW_TABLE> with full taxonomic lineages and sorts
+    the rows hierarchically. Also computes summary abundance statistics and
+    allows joining arbitrary external metadata files.
+    """
+    start_time = time.time()
+    ctx = click.get_current_context()
+    print_header(ctx)
+    print_parameters(ctx.params)
+    
+    try:
+        summary = annotate_table_logic(
+            input_table=input_table,
+            taxonomy_dir=taxonomy,
+            output_file=output,
+            metadata_files=list(metadata) if metadata else []
         )
         summary["status"] = "Success"
         print_footer(start_time, summary)

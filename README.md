@@ -26,6 +26,7 @@ SweetBITS provides several high-performance tools for processing Kraken 2 output
     - `clade`: Cumulative clade counts (contains redundant counts).
     - `canonical`: **Canonical Remainders**. Essentially taxon mode but where reads between canonical ranks have been pushed up to the nearest canonical ancestor (NCA). Eliminates double-counting while conserving mass balance. Supports "non-canonical rank skipping" (Canonical Rank Read Standardization).
     - *Note:* `--exclude-samples` will issue a warning if an ID in your exclusion file is missing from the dataset.
+- `annotate-table`: Transforms numeric abundance matrices into human-readable files. Automatically injects full taxonomic lineages from JolTax, calculates mean/median abundance, sorts rows hierarchically (Superkingdom -> Species), and seamlessly joins multiple external metadata files (auto-resolving column collisions).
 - `extract-reads`: Efficiently streams reads from Parquet files back into FASTQ.gz format with high throughput and a constant memory profile (OOM-safe). Supports TaxID and temporal filters.
 - `inspect`: View provenance metadata, compression settings, and sorting information stored in SweetBITS Parquet files.
 

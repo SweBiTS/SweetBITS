@@ -42,7 +42,25 @@ sweetbits table merged_reports.parquet \
     --clade 2
 ```
 
-## 3. Extracting Reads (`extract-reads`)
+## 3. Annotating Tables (`annotate-table`)
+
+Transform numeric abundance matrices into human-readable files sorted by taxonomy, and integrate external metadata.
+
+```bash
+# Basic taxonomy annotation and hierarchical sorting
+sweetbits annotate-table canonical_table.tsv \
+    --taxonomy /path/to/joltax_cache \
+    --output annotated_canonical.tsv
+
+# Join multiple external metadata files (e.g., GBIF flags, Kraken stats)
+sweetbits annotate-table abundance_table.parquet \
+    --taxonomy /path/to/joltax_cache \
+    --metadata gbif_status.csv \
+    --metadata assembly_metrics.tsv \
+    --output highly_annotated.csv
+```
+
+## 4. Extracting Reads (`extract-reads`)
 
 Stream reads from annotated Parquet files back to FASTQ.gz format.
 

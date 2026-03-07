@@ -216,10 +216,17 @@ Streams `<KRAKEN_PARQUET>` to extract reads into FASTQ format with high throughp
 
 #### `annotate_table`
 Amends `<RAW_TABLE>` with JolTax lineage metadata and outputs `<ANNOTATED_TABLE>`.
-- **Implementation Note:** This tool is responsible for sorting the final output. Preferred strategies:
-  1. Taxonomic hierarchy (Domain -> Species).
-  2. DFS of the taxonomy tree guided by mean/median abundance.
-> **AI DIRECTIVE:** Prompt the user to discuss integration of external metadata (GBIF TP/FP files, sibling reference features, assembly stats, Kraken database minimizers) before coding this tool.
+- **Inputs:** `<RAW_TABLE>` (Parquet, CSV, TSV).
+- **Arguments:**
+  - `--taxonomy DIR`: JolTax cache directory (Required).
+  - `--output FILE`: Path to save the annotated table.
+  - `--metadata FILE`: (Multiple allowed) Path to external metadata files to join.
+- **Implementation Details:**
+  - Uses `JolTree.annotate()` to inject `t_` prefixed taxonomic columns.
+  - Left-joins external metadata files, automatically resolving column collisions by appending the filename stem.
+  - Calculates `median_abundance` and `mean_abundance` across sample columns.
+  - Sorts rows hierarchically across canonical taxonomic ranks (Superkingdom -> Species).
+  - Column Order: Taxonomy -> External Metadata -> Summary Stats -> Abundance Matrix.
 
 #### `to_krona`
 Generates Krona plots from abundance tables. Needs further discussion.
@@ -282,5 +289,5 @@ All SweetBITS tools that read `<KRAKEN_PARQUET>` or `<REPORT_PARQUET>` files mus
 3. [x] Implement `table` for abundance matrix generation.
 4. [x] Implement `extract_reads` for FASTQ streaming.
 5. [x] Implement `inspect` for metadata viewing.
-6. [ ] Implement `annotate_table` for taxonomic annotation and sorting.
+6. [x] Implement `annotate_table` for taxonomic annotation and sorting.
 7. [ ] TBD...
