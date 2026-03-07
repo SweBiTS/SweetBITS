@@ -27,9 +27,25 @@ def test_parse_sample_id_underscore():
     assert result["week"] == 1
     assert result["suffix"] == "142"
 
+def test_parse_sample_id_short_suffix():
+    # Test 1-digit suffix
+    result = parse_sample_id("Ki-2022_01_1")
+    assert result["suffix"] == "1"
+    
+    # Test 2-digit suffix
+    result = parse_sample_id("Lj-2022_01_12")
+    assert result["suffix"] == "12"
+
+def test_parse_sample_id_hyphen_separators():
+    # The new regex allows Ki-2022-01-001
+    result = parse_sample_id("Ki-2022-01-001")
+    assert result["year"] == 2022
+    assert result["week"] == 1
+    assert result["suffix"] == "001"
+
 def test_parse_sample_id_invalid():
     with pytest.raises(ValueError, match="Invalid sample ID format"):
-        parse_sample_id("Ki-1974_02_ABC") # Non-numeric suffix
+        parse_sample_id("Ki-1974_02_ABCD") # 4-digit suffix (too long)
     
     with pytest.raises(ValueError, match="Invalid sample ID format"):
         parse_sample_id("XX-2022_01_001") # Invalid site

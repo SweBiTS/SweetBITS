@@ -18,17 +18,17 @@ def parse_sample_id(sample_id: str) -> Dict[str, Any]:
     - Site: 'Ki' or 'Lj'
     - Year: 4 digits
     - Week: 1 or 2 digits (validated to range 1-53)
-    - Suffix: Exactly 3 digits
+    - Suffix: 1 to 3 digits
     
     Args:
-        sample_id: The string ID to parse (e.g., 'Ki-2022_20_001').
+        sample_id: The string ID to parse (e.g., 'Ki-2022_20_001', 'Lj_2013_1_142').
 
     Returns:
         A dictionary containing:
         - site: 'Kiruna' or 'Ljungbyhed'
         - year: int
         - week: int
-        - suffix: str (the 3-digit ZZZ part)
+        - suffix: str (the 1-3 digit ZZZ part)
         - sample_id: original sample ID
     
     Raises:
@@ -38,18 +38,18 @@ def parse_sample_id(sample_id: str) -> Dict[str, Any]:
     # ^(Ki|Lj)      : Starts with Ki or Lj
     # [-_]          : Followed by a hyphen or underscore
     # (\d{4})       : Exactly 4 digits for the year
-    # _             : Underscore separator
+    # [-_]          : Followed by a hyphen or underscore (Generalizing separator)
     # (\d{1,2})     : 1 or 2 digits for the week
-    # _             : Underscore separator
-    # (\d{3})       : Exactly 3 digits for the filter/replicate suffix
+    # [-_]          : Followed by a hyphen or underscore
+    # (\d{1,3})     : 1 to 3 digits for the filter/replicate suffix
     # $             : End of string
-    pattern = r"^(Ki|Lj)[-_](\d{4})_(\d{1,2})_(\d{3})$"
+    pattern = r"^(Ki|Lj)[-_](\d{4})[-_](\d{1,2})[-_](\d{1,3})$"
     match = re.match(pattern, sample_id)
     
     if not match:
         raise ValueError(
             f"Invalid sample ID format: '{sample_id}'. "
-            "Expected 'Ki-YYYY_WW_ZZZ' or 'Lj-YYYY_WW_ZZZ' with numeric components."
+            "Expected 'Ki-YYYY_WW_ZZZ' or 'Lj-YYYY_WW_ZZZ' with numeric components (1-3 digit suffix)."
         )
     
     site_code, year_str, week_str, suffix = match.groups()
