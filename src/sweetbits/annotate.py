@@ -61,11 +61,10 @@ def annotate_table_logic(
 
     # 2. JolTax Annotation
     tree = JolTree.load(str(taxonomy_dir))
-    tax_df = tree.annotate(base_tids, strict=False)
     
-    # Calculate how many were successfully annotated (where t_scientific_name is not null)
-    # If JolTax returns Unknown/None for missing, it might not be null, but let's assume 
-    # we can just report the full lookup attempt since strict=False handles it safely.
+    # We enforce strict=True because the JolTax cache MUST match the Kraken database
+    # used to generate the abundance table. Missing TaxIDs indicate a critical config error.
+    tax_df = tree.annotate(base_tids, strict=True)
     click.secho(f"Annotated {num_taxa}/{num_taxa} taxa using JolTax taxonomy", fg="green", err=True)
     
     tax_cols = tax_df.columns
