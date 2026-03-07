@@ -40,21 +40,18 @@ def calculate_canonical_remainders(
 
     Raises:
         ValueError        : If clade_filter is provided but is not a canonical rank.
+        RuntimeError      : If the mass balance check fails for any sample.
     """
     num_total_nodes = len(tree._index_to_id)
     
     # 1. SCOPE DEFINITION
-    # Establish the calculation boundaries. We strictly enforce canonical ranks for
-    # filters to ensure mathematical consistency. The entry/exit times allow us to
-    # create a fast boolean mask for the entire subtree.
     global_root_idx = 0 
     if clade_filter:
         rank = tree.get_rank(clade_filter)
         allowed_ranks = set(CANONICAL_RANKS) | {tree.top_rank}
         if rank not in allowed_ranks:
             raise ValueError(
-                f"Clade filter TaxID {clade_filter} has rank '{rank}', which is not a canonical rank. "
-                f"In canonical mode, the clade filter must be one of: {sorted(list(allowed_ranks))}"
+                f"Clade filter TaxID {clade_filter} has rank '{rank}', which is not a canonical rank."
             )
         calc_root_idx = tree._get_indices(np.array([clade_filter]))[0]
         entry = tree.entry_times[calc_root_idx]
@@ -65,9 +62,6 @@ def calculate_canonical_remainders(
         in_scope = np.ones(num_total_nodes, dtype=bool)
 
     # 2. NCA TARGET MAPPING
-    # Map every node in the tree to its nearest canonical parent. We use depths to 
-    # ensure that we always pick the most specific rank (e.g., Species over Genus).
-    # Nodes without a target default to the calculation root.
     target_map = np.full(num_total_nodes, -1, dtype=np.int32)
     depths = np.full(num_total_nodes, -1, dtype=np.int32)
     allowed_ranks = set(CANONICAL_RANKS) | {tree.top_rank}
@@ -84,9 +78,6 @@ def calculate_canonical_remainders(
     target_map[(target_map == -1) & in_scope] = calc_root_idx
     
     # 3. ACTIVE NODE IDENTIFICATION
-    # Find the subset of canonical nodes that actually contain data or are targets
-    # for data in our input. This allows us to perform math on a small matrix
-    # instead of the full taxonomy.
     input_tids = df["t_id"].unique().to_numpy()
     input_indices = tree._get_indices(input_tids)
     valid_input_mask = (input_indices != -1) & in_scope[input_indices]
@@ -95,9 +86,6 @@ def calculate_canonical_remainders(
     active_canonical_indices = np.unique(ncas_of_input)
     
     # 4. AGGREGATION SETUP (THE 'VOTING' PATH)
-    # Define the subtraction flow: each canonical node votes its entire clade 
-    # value into its parent's NCA bucket. np.arange maps these back to local
-    # positions in our results matrix.
     is_not_root = active_canonical_indices != calc_root_idx
     active_canonical_subset = active_canonical_indices[is_not_root]
     parent_indices = tree.parents[active_canonical_subset]
@@ -112,9 +100,6 @@ def calculate_canonical_remainders(
     agg_targets, agg_sources = agg_targets[valid_agg], agg_sources[valid_agg]
     
     # 5. VECTORIZED MATRIX SUBTRACTION
-    # Pivot all samples into a single matrix. np.add.at performs buffered addition,
-    # ensuring all children are summed correctly into their parent's bucket 
-    # even if multiple children share a parent.
     matrix_df = df.pivot(values="clade_reads", index="t_id", on="sample_id", aggregate_function="sum").fill_null(0)
     sample_names = [c for c in matrix_df.columns if c != "t_id"]
     counts_matrix = matrix_df[sample_names].to_numpy()
@@ -135,9 +120,28 @@ def calculate_canonical_remainders(
         np.add.at(child_sums, agg_targets, sample_clade_counts[agg_sources])
         remainders[:, j] = sample_clade_counts - child_sums
         
-    # 6. RECONSTRUCTION AND OUTPUT
-    # Convert results back to long-format using Polars Unpivot (Melt) for 
-    # maximum performance. Final join restores unclassified data if requested.
+    # 6. MASS BALANCE AUDIT
+    # Verify that Sum(Remainders) + Unclassified == Total Reads at calculation root.
+    root_tid = tree._index_to_id[calc_root_idx]
+    for j, sid in enumerate(sample_names):
+        total_row = df.filter((pl.col("sample_id") == sid) & (pl.col("t_id") == root_tid))
+        expected_total = total_row["clade_reads"].sum() if not total_row.is_empty() else 0
+        
+        actual_rem_sum = remainders[:, j].sum()
+        unclass_row = df.filter((pl.col("sample_id") == sid) & (pl.col("t_id") == 0))
+        unclass_val = unclass_row["clade_reads"].sum() if not unclass_row.is_empty() else 0
+        
+        # When clade_filter is used, unclassified is outside the calculation scope.
+        actual_total = actual_rem_sum + (unclass_val if clade_filter is None else 0)
+        
+        if actual_total != expected_total:
+            raise RuntimeError(
+                f"Mass balance check failed for sample '{sid}'. "
+                f"Expected {expected_total} reads (at root {root_tid}), "
+                f"but calculated {actual_total} reads (Sum of remainders={actual_rem_sum}, Unclassified={unclass_val})."
+            )
+
+    # 7. RECONSTRUCTION
     rem_tids = tree._index_to_id[active_canonical_indices]
     result_wide = pl.from_numpy(remainders, schema=sample_names).with_columns(t_id = pl.Series(rem_tids).cast(pl.UInt32))
     result = result_wide.unpivot(index="t_id", variable_name="sample_id", value_name="val")
