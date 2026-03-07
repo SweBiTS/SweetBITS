@@ -66,6 +66,20 @@ def canonical_setup(tmp_path):
         "taxonomy": cache_dir
     }
 
+def test_canonical_remainder_invalid_filter(canonical_setup, tmp_path):
+    output_tsv = tmp_path / "fail.tsv"
+    
+    # 555555 is 'subgenus' in our setup, which is non-canonical.
+    # This should raise a ValueError.
+    with pytest.raises(ValueError, match="is not a canonical rank"):
+        generate_table_logic(
+            input_parquet=canonical_setup["parquet"],
+            output_file=output_tsv,
+            mode="canonical",
+            taxonomy_dir=canonical_setup["taxonomy"],
+            clade_filter=555555
+        )
+
 def test_canonical_remainder_logic(canonical_setup, tmp_path):
     output_tsv = tmp_path / "canonical_table.tsv"
     
@@ -79,8 +93,6 @@ def test_canonical_remainder_logic(canonical_setup, tmp_path):
     )
     
     df = pl.read_csv(output_tsv, separator="\t")
-    print("\nDEBUG: Result DataFrame:")
-    print(df)
     
     # Expected results:
     # 5000001 (Species) voted 20 into 5000000 (Genus, its NCA).

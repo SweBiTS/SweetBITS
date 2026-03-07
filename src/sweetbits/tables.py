@@ -37,82 +37,81 @@ def calculate_canonical_remainders(
 
     Returns:
         A long-format DataFrame with columns ['t_id', 'sample_id', 'val'].
+
+    Raises:
+        ValueError        : If clade_filter is provided but is not a canonical rank.
     """
-    num_total_nodes = len(tree._index_to_id)
-    
     # 1. RESOLVE GLOBAL CONTEXT AND SCOPE
-    # Root is typically TaxID 1 (Internal Index 0).
     global_root_idx = 0 
-    calc_root_idx = tree._get_indices(np.array([clade_filter]))[0] if clade_filter else global_root_idx
     
-    # Create an 'in_scope' mask using pre-order traversal times.
-    # This ensures we only process nodes within the requested clade subtree.
     if clade_filter:
+        # Strict Requirement: clade_filter MUST be a canonical rank in canonical mode.
+        rank = tree.get_rank(clade_filter)
+        allowed_ranks = set(CANONICAL_RANKS) | {tree.top_rank}
+        
+        if rank not in allowed_ranks:
+            raise ValueError(
+                f"Clade filter TaxID {clade_filter} has rank '{rank}', which is not a canonical rank. "
+                f"In canonical mode, the clade filter must be one of: {sorted(list(allowed_ranks))}"
+            )
+            
+        calc_root_idx = tree._get_indices(np.array([clade_filter]))[0]
         entry = tree.entry_times[calc_root_idx]
         exit = tree.exit_times[calc_root_idx]
         in_scope = (tree.entry_times >= entry) & (tree.entry_times < exit)
     else:
-        in_scope = np.ones(num_total_nodes, dtype=bool)
+        calc_root_idx = global_root_idx
+        in_scope = np.ones(len(tree._index_to_id), dtype=bool)
 
     # 2. BUILD THE ACTIVE NCA MAP
-    # target_map[child] = index of nearest canonical ancestor.
+    num_total_nodes = len(tree._index_to_id)
     target_map = np.full(num_total_nodes, -1, dtype=np.int32)
     depths = np.full(num_total_nodes, -1, dtype=np.int32)
     
+    allowed_ranks = set(CANONICAL_RANKS) | {tree.top_rank}
+    
     for rank, map_arr in tree.canonical_maps.items():
-        if rank in CANONICAL_RANKS or rank == tree.top_rank:
-            # We only accept ancestors that are within our clade scope
+        if rank in allowed_ranks:
             valid_anc = (map_arr != -1) & in_scope[map_arr]
-            
             anc_depths = np.full(num_total_nodes, -1, dtype=np.int32)
             anc_depths[valid_anc] = tree.depths[map_arr[valid_anc]]
             
-            # Use depths to ensure we pick the DEEPEST (nearest) canonical ancestor
             mask = valid_anc & (anc_depths > depths)
             depths[mask] = anc_depths[mask]
             target_map[mask] = map_arr[mask]
             
-    # Nodes within scope that have no canonical ancestor map to the calculation root.
-    # Nodes outside scope remain -1.
     target_map[(target_map == -1) & in_scope] = calc_root_idx
     
     # 3. IDENTIFY ACTIVE CANONICAL NODES
-    # Leaf-ish nodes in our input data
     input_tids = df["t_id"].unique().to_numpy()
     input_indices = tree._get_indices(input_tids)
     valid_input_mask = (input_indices != -1) & in_scope[input_indices]
     active_indices = input_indices[valid_input_mask]
     
-    # Identify unique canonical targets that will appear in the output.
     ncas_of_input = target_map[active_indices]
     active_canonical_indices = np.unique(ncas_of_input)
     
-    # 4. PREPARE AGGREGATION (THE 'VOTING' PATH)
+    # 4. PREPARE AGGREGATION
     is_not_root = active_canonical_indices != calc_root_idx
     active_canonical_subset = active_canonical_indices[is_not_root]
     
-    # For every active canonical node, find where its reads should be subtracted from.
     parent_indices = tree.parents[active_canonical_subset]
     contribution_targets = target_map[parent_indices]
     
-    # Map tree indices to local positions in the remainder matrix.
     tree_to_active_pos = np.full(num_total_nodes, -1, dtype=np.int32)
     tree_to_active_pos[active_canonical_indices] = np.arange(len(active_canonical_indices))
     
     agg_targets = tree_to_active_pos[contribution_targets]
     agg_sources = np.where(is_not_root)[0]
     
-    # Filter out invalid aggregations (e.g., parent is outside calculation scope)
     valid_agg = agg_targets != -1
     agg_targets, agg_sources = agg_targets[valid_agg], agg_sources[valid_agg]
     
     # 5. MATRIX MATH
-    # Pivot to matrix for vectorized sample processing.
     matrix_df = df.pivot(values="clade_reads", index="t_id", on="sample_id", aggregate_function="sum").fill_null(0)
     sample_names = [c for c in matrix_df.columns if c != "t_id"]
     counts_matrix = matrix_df[sample_names].to_numpy()
     
-    # BUG FIX: Map matrix indices correctly using the actual row locations.
     matrix_indices = tree._get_indices(matrix_df["t_id"].to_numpy())
     idx_to_matrix_pos = np.full(num_total_nodes, -1, dtype=np.int32)
     valid_matrix = matrix_indices != -1
@@ -122,19 +121,14 @@ def calculate_canonical_remainders(
     found_in_input_mask = active_in_input_pos != -1
     
     remainders = np.zeros((len(active_canonical_indices), len(sample_names)), dtype=np.int64)
-    
     for j in range(len(sample_names)):
         sample_clade_counts = np.zeros(len(active_canonical_indices), dtype=np.int64)
         sample_clade_counts[found_in_input_mask] = counts_matrix[active_in_input_pos[found_in_input_mask], j]
-        
         child_sums = np.zeros(len(active_canonical_indices), dtype=np.int64)
-        # Sum children clades into parent subtraction buckets.
         np.add.at(child_sums, agg_targets, sample_clade_counts[agg_sources])
-        
         remainders[:, j] = sample_clade_counts - child_sums
         
-    # 6. HIGH-PERFORMANCE RECONSTRUCTION
-    # Melt the wide matrix back into long-format.
+    # 6. RECONSTRUCTION
     rem_tids = tree._index_to_id[active_canonical_indices]
     result_wide = pl.from_numpy(remainders, schema=sample_names).with_columns(t_id = pl.Series(rem_tids).cast(pl.UInt32))
     result = result_wide.unpivot(index="t_id", variable_name="sample_id", value_name="val")
