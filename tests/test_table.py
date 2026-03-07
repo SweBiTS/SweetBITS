@@ -70,12 +70,11 @@ def test_table_exclude_samples(mock_data, tmp_path):
         f.write("Lj-2022_20_001\n")
         
     output_csv = tmp_path / "filtered_table.csv"
-    # This should leave only Lj-2022_20_002
-    # In our mock, both are week 20, so the 'period' column name remains the same
-    # but the values should change.
+    # Explicitly use mode='taxon' to avoid taxonomy requirement for these simple tests
     generate_table_logic(
         input_parquet=mock_data["parquet"],
         output_file=output_csv,
+        mode="taxon",
         exclude_samples=exclude_file,
         min_observed=1,
         min_reads=1
@@ -94,6 +93,7 @@ def test_table_min_observed(mock_data, tmp_path):
     generate_table_logic(
         input_parquet=report_parquet,
         output_file=output_csv,
+        mode="taxon", # Use taxon mode
         min_observed=2, # Must be in both 2022_20 and 2022_21
         min_reads=1
     )
