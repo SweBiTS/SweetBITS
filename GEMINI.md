@@ -224,7 +224,7 @@ Amends `<RAW_TABLE>` with JolTax lineage metadata and outputs `<ANNOTATED_TABLE>
 - **Implementation Details:**
   - Uses `JolTree.annotate()` to inject `t_` prefixed taxonomic columns.
   - Left-joins external metadata files, automatically resolving column collisions by appending the filename stem.
-  - Calculates `median_abundance` and `mean_abundance` across sample columns.
+  - Calculates `median_signal` and `mean_signal` across sample columns.
   - Sorts rows hierarchically across canonical taxonomic ranks (Superkingdom -> Species).
   - Column Order: Taxonomy -> External Metadata -> Summary Stats -> Abundance Matrix.
 

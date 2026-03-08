@@ -124,13 +124,13 @@ def annotate_table_logic(
     # 4. Summary Statistics
     if sample_cols:
         df = df.with_columns([
-            pl.concat_list(sample_cols).list.median().alias("median_abundance"),
-            pl.mean_horizontal(sample_cols).alias("mean_abundance")
+            pl.concat_list(sample_cols).list.median().alias("median_signal"),
+            pl.mean_horizontal(sample_cols).alias("mean_signal")
         ])
     else:
         df = df.with_columns([
-            pl.lit(0.0).alias("median_abundance"),
-            pl.lit(0.0).alias("mean_abundance")
+            pl.lit(0.0).alias("median_signal"),
+            pl.lit(0.0).alias("mean_signal")
         ])
 
     # 5. Sorting (Hierarchical Taxonomy -> t_id)
@@ -142,7 +142,7 @@ def annotate_table_logic(
     df = df.sort(actual_sort_cols, nulls_last=True)
 
     # 6. Column Ordering
-    ordered_cols = tax_cols + metadata_cols + ["median_abundance", "mean_abundance"] + sample_cols
+    ordered_cols = tax_cols + metadata_cols + ["median_signal", "mean_signal"] + sample_cols
     # Ensure t_id is first if it isn't already (though JolTax annotate puts it first)
     if ordered_cols[0] != "t_id":
         ordered_cols.remove("t_id")

@@ -54,7 +54,7 @@ You can join any number of external metadata files (CSV, TSV, or Parquet) to you
 - **Column Order:** The final output is strictly ordered to maximize readability:
   1. `t_id` and all taxonomic ranks (`t_scientific_name`, `t_phylum`, etc.)
   2. All external metadata columns (in the order the files were provided)
-  3. `median_abundance` and `mean_abundance` (dynamically calculated)
+  3. `median_signal` and `mean_signal` (dynamically calculated)
   4. The raw sample abundance matrix
 
 ```bash
