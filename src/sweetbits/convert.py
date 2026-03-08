@@ -13,7 +13,7 @@ import pyarrow.parquet as pq
 from pathlib import Path
 from typing import Dict, Any, Optional, Iterator, Tuple
 
-from sweetbits.utils import parse_sample_id
+from sweetbits.utils import parse_sample_id, get_sample_info
 from sweetbits.metadata import get_standard_metadata
 
 def _open_text_stream(path: Path):
@@ -101,16 +101,10 @@ def convert_kraken_logic(
         
     # 1. Determine Data Standard
     # Check if the filename matches SweBITS patterns to inject temporal columns
-    sample_id_guess = kraken_file.name.split('.')[0]
-    try:
-        info = parse_sample_id(sample_id_guess)
-        data_standard = "SWEBITS"
-        year, week = info["year"], info["week"]
-        sample_id = sample_id_guess
-    except ValueError:
-        data_standard = "GENERIC"
-        year, week = 0, 0
-        sample_id = sample_id_guess
+    info = get_sample_info(kraken_file.name)
+    data_standard = info["data_standard"]
+    sample_id = info["sample_id"]
+    year, week = info["year"], info["week"]
 
     has_fastq = False if no_fastq else (r1_file is not None)
     

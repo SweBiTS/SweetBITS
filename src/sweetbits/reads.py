@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Optional, List, Dict, Any, IO, Tuple
 from collections import OrderedDict
 from joltax import JolTree
-from sweetbits.utils import parse_sample_id
+from sweetbits.utils import parse_sample_id, get_sample_info
 from sweetbits.metadata import validate_sweetbits_parquet
 
 def format_short_name(scientific_name: str) -> str:
@@ -165,13 +165,10 @@ def extract_reads_logic(
     try:
         for pfile in parquet_files:
             # FAST-FAIL: Quick filename-based temporal check before scanning Parquet
-            sample_id_guess = pfile.name.split('.')[0]
-            try:
-                info = parse_sample_id(sample_id_guess)
+            info = get_sample_info(pfile.name)
+            if info["data_standard"] == "SWEBITS":
                 if not is_in_temporal_range(info['year'], info['week'], year_start, week_start, year_end, week_end):
                     continue
-            except ValueError:
-                pass # Not a SweBITS filename, proceed to scan
 
             # Validate metadata and columns
             metadata = validate_sweetbits_parquet(pfile, expected_type="KRAKEN_PARQUET", required_columns=required_cols)

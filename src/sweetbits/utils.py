@@ -5,12 +5,47 @@ Utility functions for parsing and validating SweBITS data structures.
 
 import re
 from pathlib import Path
-from typing import List, Dict
+from typing import List, Dict, Any
 
 UNCLASSIFIED_TID = 0
 FILTERED_TID = 4294967295
 
-def parse_sample_id(sample_id: str) -> Dict[str, int]:
+def get_sample_info(filename: str) -> Dict[str, Any]:
+    """
+    Extracts sample ID and metadata (year, week) from a filename.
+    
+    Automatically detects if the filename follows the SweBITS pattern
+    or should be treated as a generic sample.
+    
+    Args:
+        filename : Name of the file (e.g., 'Ki-2022_20_001.kraken').
+        
+    Returns:
+        A dictionary containing:
+        - sample_id     : Base name before all extensions.
+        - data_standard : 'SWEBITS' or 'GENERIC'.
+        - year          : ISO year (0 if GENERIC).
+        - week          : ISO week (0 if GENERIC).
+    """
+    # Extract base name before any extensions (e.g. sample.kraken.gz -> sample)
+    sample_id = filename.split('.')[0]
+    try:
+        info = parse_sample_id(sample_id)
+        return {
+            "sample_id": sample_id,
+            "data_standard": "SWEBITS",
+            "year": info["year"],
+            "week": info["week"]
+        }
+    except ValueError:
+        return {
+            "sample_id": sample_id,
+            "data_standard": "GENERIC",
+            "year": 0,
+            "week": 0
+        }
+
+def parse_sample_id(sample_id: str) -> Dict[str, Any]:
     """
     Parses a SweBITS sample ID into its components and validates the format.
     

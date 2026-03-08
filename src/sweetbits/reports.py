@@ -6,7 +6,7 @@ Logic for parsing and merging Kraken 2 report files with automatic format detect
 import polars as pl
 from pathlib import Path
 from typing import List, Optional, Tuple, Dict, Any
-from sweetbits.utils import parse_sample_id
+from sweetbits.utils import parse_sample_id, get_sample_info
 from sweetbits.metadata import get_standard_metadata, write_parquet_with_metadata
 
 def detect_report_format(file_path: Path) -> str:
@@ -140,33 +140,28 @@ def gather_reports_logic(
 
     # 2. Determine Data Standard (SWEBITS vs GENERIC)
     sample_metadata = []
-    is_swebits = True
     for f in report_files:
-        sample_id = f.name.split('.')[0]
-        try:
-            sample_metadata.append(parse_sample_id(sample_id))
-        except ValueError:
-            is_swebits = False
-            break
-            
+        sample_metadata.append(get_sample_info(f.name))
+
+    is_swebits = all(m["data_standard"] == "SWEBITS" for m in sample_metadata)
     data_standard = "SWEBITS" if is_swebits else "GENERIC"
-    
+
     # 3. Process and Stack Files
     dfs = []
     for i, file_path in enumerate(report_files):
-        sample_id = file_path.name.split('.')[0]
+        info = sample_metadata[i]
+        sample_id = info["sample_id"]
         df = parse_kraken_report(file_path, report_format)
-        
+
         cols = {
             "sample_id": pl.lit(sample_id),
             "source_file": pl.lit(str(file_path.relative_to(input_dir)))
         }
-        
+
         if is_swebits:
-            info = sample_metadata[i]
             cols["year"] = pl.lit(info["year"]).cast(pl.UInt16)
             cols["week"] = pl.lit(info["week"]).cast(pl.UInt8)
-            
+
         df = df.with_columns(**cols)
         dfs.append(df)
         
