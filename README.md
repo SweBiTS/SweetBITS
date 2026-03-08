@@ -1,5 +1,7 @@
 # SweetBITS
 
+**THIS IS A WORK IN PROGRESS** - README.md not in a final state.
+
 Bioinformatics command-line tools for the SweBITS project (metagenomic shotgun sequencing of archived air filters).
 
 See `GEMINI.md` for detailed technical specifications and architecture, and `USAGE.md` for practical examples.
