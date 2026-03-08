@@ -159,7 +159,7 @@ def gather_reports_logic(
     # 3. Process and Stack Files
     dfs = []
     
-    fill_char = click.style('#', fg='cyan')
+    fill_char = click.style('#', fg='yellow')
     label = click.style("Merging reports", fg="cyan")
     
     # Use StringCache to ensure Categorical consistency during concat
