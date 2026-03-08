@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Optional, List, Dict, Any
 from joltax import JolTree
 from sweetbits.metadata import validate_sweetbits_parquet, get_standard_metadata, write_parquet_with_metadata
+from sweetbits.utils import FILTERED_TID
 
 logger = logging.getLogger(__name__)
 
@@ -72,6 +73,12 @@ def annotate_table_logic(
 
     sample_cols = [c for c in df.columns if c != "t_id"]
     base_tids = df["t_id"].to_list()
+    
+    # Extract FILTERED_TID so JolTax doesn't process it (it's synthetic)
+    has_filtered = FILTERED_TID in base_tids
+    if has_filtered:
+        base_tids = [tid for tid in base_tids if tid != FILTERED_TID]
+
     base_tids_set = set(base_tids)
     num_taxa = len(base_tids)
 
@@ -82,6 +89,22 @@ def annotate_table_logic(
     # used to generate the abundance table. Missing TaxIDs indicate a critical config error.
     tax_df = tree.annotate(base_tids, strict=True)
     click.secho(f"Annotated {num_taxa}/{num_taxa} taxa using JolTax taxonomy", fg="green", err=True)
+    
+    # Re-inject the synthetic Filtered Classified row
+    if has_filtered:
+        filtered_row = {"t_id": [FILTERED_TID]}
+        for col in tax_df.columns:
+            if col != "t_id":
+                if col == "t_rank":
+                    filtered_row[col] = ["synthetic"]
+                elif col == "t_scientific_name":
+                    filtered_row[col] = ["Filtered classified"]
+                else:
+                    filtered_row[col] = [None]
+                    
+        # Match types exactly to avoid Polars SchemaError
+        synth_df = pl.DataFrame(filtered_row, schema=tax_df.schema)
+        tax_df = pl.concat([tax_df, synth_df])
     
     tax_cols = tax_df.columns
     df = df.join(tax_df, on="t_id", how="left")

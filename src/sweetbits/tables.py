@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Optional, List, Union, Dict, Any
 from joltax import JolTree
 from joltax.constants import CANONICAL_RANKS
-from sweetbits.utils import parse_sample_id, load_sample_id_list
+from sweetbits.utils import parse_sample_id, load_sample_id_list, FILTERED_TID
 from sweetbits.metadata import get_standard_metadata, write_parquet_with_metadata, read_parquet_metadata, validate_sweetbits_parquet
 
 logger = logging.getLogger(__name__)
@@ -194,7 +194,8 @@ def generate_table_logic(
     min_reads: int = 50,
     clade_filter: Optional[int] = None,
     keep_unclassified: bool = False,
-    proportions: bool = False
+    proportions: bool = False,
+    keep_composition: bool = False
 ) -> Dict[str, Any]:
     """
     Generates a wide-format abundance table from a merged REPORT_PARQUET file.
@@ -264,10 +265,12 @@ def generate_table_logic(
             fg="yellow", err=True
         )
 
-    # 2.5 Calculate Clade Totals for Proportions
-    clade_totals = {}
-    if proportions and mode == "clade":
-        # Calculate total reads per sample before any taxonomic filtering drops the root or unclassified.
+    # 2.5 Calculate True Totals for keep_composition
+    true_totals = {}
+    if keep_composition:
+        if mode == "clade":
+            raise ValueError("--keep-composition is not mathematically valid for 'clade' mode due to read double-counting. Please use 'taxon' or 'canonical' mode.")
+            
         tot_lf = lf
         if data_standard == "SWEBITS":
             tot_lf = tot_lf.with_columns(
@@ -277,16 +280,8 @@ def generate_table_logic(
         else:
             pkey = "sample_id"
             
-        agg_lf = tot_lf.group_by([pkey, "t_id"]).agg(pl.col("clade_reads").sum())
-        
-        totals_df = agg_lf.group_by(pkey).agg([
-            pl.col("clade_reads").filter(pl.col("t_id") != 0).max().alias("max_reads"),
-            pl.col("clade_reads").filter(pl.col("t_id") == 0).sum().alias("unclass_reads")
-        ]).fill_null(0).with_columns(
-            (pl.col("max_reads") + pl.col("unclass_reads")).alias("total_reads")
-        ).collect()
-        
-        clade_totals = dict(zip(totals_df[pkey].to_list(), totals_df["total_reads"].to_list()))
+        totals_df = tot_lf.group_by(pkey).agg(pl.col("taxon_reads").sum().alias("total_reads")).collect()
+        true_totals = dict(zip(totals_df[pkey].to_list(), totals_df["total_reads"].to_list()))
 
     # 3. Load Taxonomy Tree
     tree = None
@@ -364,6 +359,23 @@ def generate_table_logic(
                 pl.max_horizontal(sample_cols) >= min_reads
             )
             
+    # 6.4 Apply keep_composition
+    if keep_composition and sample_cols:
+        filtered_row = {"t_id": FILTERED_TID}
+        has_filtered = False
+        for c in sample_cols:
+            current_sum = table[c].sum()
+            original_total = true_totals.get(c, current_sum)
+            diff = original_total - current_sum
+            if diff < 0: diff = 0
+            filtered_row[c] = diff
+            if diff > 0:
+                has_filtered = True
+                
+        if has_filtered:
+            filtered_df = pl.DataFrame([filtered_row], schema=table.schema)
+            table = pl.concat([table, filtered_df])
+            
     # 6.5 Calculate Proportions
     if proportions and sample_cols:
         if mode in ["taxon", "canonical"]:
@@ -372,7 +384,11 @@ def generate_table_logic(
         elif mode == "clade":
             exprs = []
             for c in sample_cols:
-                total = clade_totals.get(c, 1)
+                max_class = table.filter(pl.col("t_id") != 0)[c].max()
+                if max_class is None: max_class = 0
+                unclass = table.filter(pl.col("t_id") == 0)[c].sum()
+                if unclass is None: unclass = 0
+                total = max_class + unclass
                 if total == 0: total = 1
                 exprs.append((pl.col(c) / total).alias(c))
             table = table.with_columns(exprs)

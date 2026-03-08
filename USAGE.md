@@ -46,6 +46,15 @@ sweetbits table merged_reports.parquet \
     --output proportions_table.tsv \
     --mode taxon \
     --proportions
+
+# Calculate global proportions of Bacteria by keeping filtered reads in the total
+sweetbits table merged_reports.parquet \
+    --output global_bacteria_proportions.tsv \
+    --mode canonical \
+    --taxonomy /path/to/joltax_cache \
+    --clade 2 \
+    --proportions \
+    --keep-composition
 ```
 
 ## 3. Annotating Tables (`annotate-table`)

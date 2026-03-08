@@ -174,6 +174,7 @@ Outputs abundance tables with `t_id` as the index and samples (YYYY_WW) as colum
 - **Flags:**
   - `--keep_unclassified`: (Default: False).
   - `--proportions`: Output relative proportions instead of raw read counts.
+  - `--keep-composition`: (Only for `taxon` and `canonical` modes) Retains all filtered reads in a synthetic "Filtered classified" bin (`t_id = 4294967295`). This ensures the sample total reads remain constant even when filtering out large clades, allowing `--proportions` to calculate global relative abundances. Forces `--keep_unclassified`.
 
 - **Abundance Modes Explained:**
   - `taxon`: Raw `taxon_reads` from the Kraken report. If `--proportions` is used, each column is divided by its sum, naturally summing to 1.0.

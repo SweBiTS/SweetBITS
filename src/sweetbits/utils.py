@@ -5,9 +5,12 @@ Utility functions for parsing and validating SweBITS data structures.
 
 import re
 from pathlib import Path
-from typing import Dict, Any, List
+from typing import List, Dict
 
-def parse_sample_id(sample_id: str) -> Dict[str, Any]:
+UNCLASSIFIED_TID = 0
+FILTERED_TID = 4294967295
+
+def parse_sample_id(sample_id: str) -> Dict[str, int]:
     """
     Parses a SweBITS sample ID into its components and validates the format.
     

@@ -87,11 +87,15 @@ def gather_reports(directory, output, recursive, include):
 @click.option("--clade", type=int, help="Filter for taxa rooted at this TaxID.")
 @click.option("--keep-unclassified", is_flag=True, help="Keep TaxID 0 (unclassified).")
 @click.option("--proportions", is_flag=True, help="Output relative proportions instead of raw reads.")
-def table(input_parquet, output, mode, taxonomy, exclude_samples, min_observed, min_reads, clade, keep_unclassified, proportions):
+@click.option("--keep-composition", is_flag=True, help="Retain filtered reads as 'Filtered classified' to preserve global total reads. Forces --keep-unclassified.")
+def table(input_parquet, output, mode, taxonomy, exclude_samples, min_observed, min_reads, clade, keep_unclassified, proportions, keep_composition):
     """
     Outputs abundance tables with TaxIDs as rows and samples (YYYY_WW) as columns.
     Supports filtering by clade, minimum occupancy, and read depth.
     """
+    if keep_composition:
+        keep_unclassified = True
+
     start_time = time.time()
     ctx = click.get_current_context()
     print_header(ctx)
@@ -108,7 +112,8 @@ def table(input_parquet, output, mode, taxonomy, exclude_samples, min_observed, 
             min_reads=min_reads,
             clade_filter=clade,
             keep_unclassified=keep_unclassified,
-            proportions=proportions
+            proportions=proportions,
+            keep_composition=keep_composition
         )
         summary["status"] = "Success"
         print_footer(start_time, summary)
