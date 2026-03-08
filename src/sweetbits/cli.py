@@ -18,11 +18,12 @@ from sweetbits.convert import convert_kraken_logic
 
 def print_splash():
     """Prints the stylish ASCII logo and developer information."""
-    click.secho(r"  ____                     _   ____ ___ _____ ____  ", fg="bright_cyan", bold=True, err=True)
-    click.secho(r" / ___|_      _____  ___ _| |_| __ )_ _|_   _/ ___| ", fg="bright_cyan", bold=True, err=True)
-    click.secho(r" \___ \ \ /\ / / _ \/ _ \ __|  _ \ | | | | \___ \ ", fg="cyan", bold=True, err=True)
-    click.secho(r"  ___) \ V  V /  __/  __/ |_| |_) || | | |  ___) |", fg="cyan", bold=True, err=True)
-    click.secho(r" |____/ \_/\_/ \___|\___|\__|____/|___||_| |____/ ", fg="cyan", bold=True, err=True)
+    click.echo("", err=True)
+    click.secho(r"  ____                     _   ____  ___ _____ ____  ", fg="bright_cyan", bold=True, err=True)
+    click.secho(r" / ___|_      _____  ___ _| |_| __ )|_ _|_   _/ ___| ", fg="bright_cyan", bold=True, err=True)
+    click.secho(r" \___ \ \ /\ / / _ \/ _ \ ____|  _ \ | |  | | \___ \  ", fg="cyan", bold=True, err=True)
+    click.secho(r"  ___) \ V  V /  __/  __/_| |_| |_) || |  | |  ___) | ", fg="cyan", bold=True, err=True)
+    click.secho(r" |____/ \_/\_/ \___|\_____|\__|____/|___| |_| |____/  ", fg="cyan", bold=True, err=True)
     click.echo("", err=True)
     click.secho(" A suite of sweet command-line tools for Kraken 2", fg="bright_white", err=True)
     click.secho(" derived data and the SweBITS project.", fg="bright_white", err=True)
@@ -31,7 +32,7 @@ def print_splash():
     click.echo(click.style(" GitHub:    ", fg="bright_black") + click.style("https://github.com/SweBITS/SweetBITS", fg="bright_blue"), err=True)
     click.echo(click.style(" Version:   ", fg="bright_black") + click.style(f"v{__version__}", fg="yellow"), err=True)
     click.echo("", err=True)
-    click.echo("-" * 60, err=True)
+    click.echo("-" * 55, err=True)
     click.echo("", err=True)
 
 def print_invocation_info():
