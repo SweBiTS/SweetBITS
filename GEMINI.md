@@ -31,7 +31,7 @@ SweetBITS automatically detects and adapts to two distinct schema profiles based
 - **Metadata:** `data_standard: SWEBITS`
 - **Features:** 
     - Includes `year` and `week` columns in Parquet files.
-    - `table` command defaults to grouping by `period` (`YYYY_WW`), automatically aggregating replicates.
+    - `table` command defaults to grouping by `period` (`YYYY_WW`), enforcing the strict project constraint of one unique sample per week per site.
 - **Sorting:** `[year, week, sample_id, t_id]`
 
 ### 2. **GENERIC Profile**

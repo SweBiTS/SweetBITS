@@ -177,7 +177,8 @@ def generate_table_logic(
 
     # 6. Matrix Generation (Pivoting)
     # Transform the long-format data into a wide-format matrix. 
-    # For SWEBITS data, group by YYYY_WW to aggregate technical replicates.
+    # For SWEBITS data, group by YYYY_WW to enforce the strict project 
+    # constraint of one unique sample per week per site.
     if data_standard == "SWEBITS":
         pivot_df = pivot_df.with_columns(
             (pl.col("year").cast(pl.String) + "_" + pl.col("week").cast(pl.String).str.pad_start(2, "0")).alias("period")
