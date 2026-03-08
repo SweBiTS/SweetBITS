@@ -40,6 +40,12 @@ sweetbits table merged_reports.parquet \
     --output bacteria_only.tsv \
     --taxonomy /path/to/joltax_cache \
     --clade 2
+
+# Output relative proportions instead of raw counts
+sweetbits table merged_reports.parquet \
+    --output proportions_table.tsv \
+    --mode taxon \
+    --proportions
 ```
 
 ## 3. Annotating Tables (`annotate-table`)

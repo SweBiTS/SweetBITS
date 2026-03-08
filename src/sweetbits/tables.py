@@ -193,7 +193,8 @@ def generate_table_logic(
     min_observed: int = 25,
     min_reads: int = 50,
     clade_filter: Optional[int] = None,
-    keep_unclassified: bool = False
+    keep_unclassified: bool = False,
+    proportions: bool = False
 ) -> Dict[str, Any]:
     """
     Generates a wide-format abundance table from a merged REPORT_PARQUET file.
@@ -262,6 +263,30 @@ def generate_table_logic(
             f"Warning: --min-observed ({min_observed}) is more than 50% of active samples ({active_samples}).", 
             fg="yellow", err=True
         )
+
+    # 2.5 Calculate Clade Totals for Proportions
+    clade_totals = {}
+    if proportions and mode == "clade":
+        # Calculate total reads per sample before any taxonomic filtering drops the root or unclassified.
+        tot_lf = lf
+        if data_standard == "SWEBITS":
+            tot_lf = tot_lf.with_columns(
+                (pl.col("year").cast(pl.String) + "_" + pl.col("week").cast(pl.String).str.pad_start(2, "0")).alias("period")
+            )
+            pkey = "period"
+        else:
+            pkey = "sample_id"
+            
+        agg_lf = tot_lf.group_by([pkey, "t_id"]).agg(pl.col("clade_reads").sum())
+        
+        totals_df = agg_lf.group_by(pkey).agg([
+            pl.col("clade_reads").filter(pl.col("t_id") != 0).max().alias("max_reads"),
+            pl.col("clade_reads").filter(pl.col("t_id") == 0).sum().alias("unclass_reads")
+        ]).fill_null(0).with_columns(
+            (pl.col("max_reads") + pl.col("unclass_reads")).alias("total_reads")
+        ).collect()
+        
+        clade_totals = dict(zip(totals_df[pkey].to_list(), totals_df["total_reads"].to_list()))
 
     # 3. Load Taxonomy Tree
     tree = None
@@ -338,6 +363,19 @@ def generate_table_logic(
             table = table.filter(
                 pl.max_horizontal(sample_cols) >= min_reads
             )
+            
+    # 6.5 Calculate Proportions
+    if proportions and sample_cols:
+        if mode in ["taxon", "canonical"]:
+            exprs = [(pl.col(c) / pl.col(c).sum()).alias(c) for c in sample_cols]
+            table = table.with_columns(exprs)
+        elif mode == "clade":
+            exprs = []
+            for c in sample_cols:
+                total = clade_totals.get(c, 1)
+                if total == 0: total = 1
+                exprs.append((pl.col(c) / total).alias(c))
+            table = table.with_columns(exprs)
         
     # 7. Output Generation
     ext = output_file.suffix.lower()

@@ -173,10 +173,12 @@ Outputs abundance tables with `t_id` as the index and samples (YYYY_WW) as colum
   - `--clade INT`: Output only taxa rooted at this TaxID.
 - **Flags:**
   - `--keep_unclassified`: (Default: False).
+  - `--proportions`: Output relative proportions instead of raw read counts.
+
 - **Abundance Modes Explained:**
-  - `taxon`: Raw `taxon_reads` from the Kraken report (reads assigned directly to this TaxID).
-  - `clade`: Raw `clade_reads` from the Kraken report (cumulative reads for this taxon and all its descendants). **Caution:** This mode contains redundant counts across ranks.
-  - `canonical`: **Canonical Remainders**. Essentially taxon mode but where reads between canonical ranks have been pushed up to the nearest canonical ancestor (NCA). This eliminates double-counting while conserving mass balance.
+  - `taxon`: Raw `taxon_reads` from the Kraken report. If `--proportions` is used, each column is divided by its sum, naturally summing to 1.0.
+  - `clade`: Raw `clade_reads` from the Kraken report (cumulative reads). **Caution:** This mode contains redundant counts. If `--proportions` is used, each row is divided by the true total reads of the sample (Max classified clade + Unclassified), meaning the column will *not* sum to 1.0, but each value represents the true proportion of the sample belonging to that clade.
+  - `canonical`: **Canonical Remainders**. Essentially taxon mode but where reads between canonical ranks have been pushed up to the nearest canonical ancestor (NCA). Eliminates double-counting while conserving mass balance. If `--proportions` is used, each column is divided by its sum, naturally summing to 1.0.
     - Uses `clade_reads` as input.
     - Identifies the Nearest Canonical Ancestor (NCA) for every node.
     - **Non-canonical rank skipping:** Automatically "skips" non-canonical ranks (e.g., subspecies, subgenus) to attribute reads to the nearest standard parent (Canonical Rank Read Standardization).
