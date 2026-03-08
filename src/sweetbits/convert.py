@@ -112,6 +112,12 @@ def convert_kraken_logic(
         )
     has_fastq = (r1_file is not None)
     
+    # Log the conversion mode
+    if has_fastq:
+        click.secho("Mode: FAT Parquet (FASTQ sequences and quality scores included).", fg="cyan", err=True)
+    else:
+        click.secho("Mode: SKINNY Parquet (Taxonomic info only, sequences omitted).", fg="cyan", err=True)
+    
     # 2. Stream Initialization
     # We use independent OS-level decompression streams to avoid the Python GIL
     k_stream, k_proc = _open_text_stream(kraken_file)
