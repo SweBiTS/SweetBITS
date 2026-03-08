@@ -60,7 +60,7 @@ def test_annotate_table_basic(tmp_path, mock_taxonomy, base_table):
     
     # Check taxonomy columns are injected (t_scientific_name, etc.)
     assert "t_scientific_name" in df.columns
-    assert "t_superkingdom" in df.columns
+    assert "t_superkingdom" in df.columns or "t_domain" in df.columns
     
     # Check stats columns
     assert "mean_signal" in df.columns

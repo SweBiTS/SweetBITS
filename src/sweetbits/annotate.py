@@ -135,7 +135,7 @@ def annotate_table_logic(
 
     # 5. Sorting (Hierarchical Taxonomy -> t_id)
     sort_cols_target = [
-        "t_superkingdom", "t_phylum", "t_class", "t_order", 
+        "t_domain", "t_superkingdom", "t_phylum", "t_class", "t_order", 
         "t_family", "t_genus", "t_species", "t_id"
     ]
     actual_sort_cols = [c for c in sort_cols_target if c in df.columns]
