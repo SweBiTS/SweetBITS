@@ -136,12 +136,7 @@ Converts Kraken output and FASTQ files into high-performance, sorted `<KRAKEN_PA
   - `--r1 FILE`: Path to R1 FASTQ file (can be `.gz`).
   - `--r2 FILE`: Path to R2 FASTQ file (can be `.gz`).
   - `--cores INT`: Number of CPU cores to dedicate to the process (Default: all available). Controls Polars thread pool and OS-level decompression pipes. Recommendation: At least 4 cores for optimal streaming.
-- **Implementation Details:**
-  - **Skinny vs Fat:** If `--r1` and `--r2` are omitted, a "Skinny" Parquet is created, omitting sequence and quality strings to save significant disk space while retaining all taxonomic intelligence.
-  - **Kraken-Driven Left Join:** Missing reads in the FASTQ files (e.g., host-depleted) receive `null` sequences to perfectly preserve original sample mass balance.
-  - **Synchronicity Audit:** Fails loudly if FASTQ read order deviates from Kraken report order.
-  - **Data Types:** Heavily downcasts metrics (e.g., `UInt8` for lengths, `UInt32` for TaxIDs).
-  - **Sorting:** Rows are strictly sorted by `t_id` to maximize ZSTD run-length encoding.
+  - `--overwrite`: Overwrite the output file if it exists.
 
 #### `gather_reports`
 Merges multiple 8-column Kraken reports into a single Parquet file.
@@ -152,18 +147,7 @@ Merges multiple 8-column Kraken reports into a single Parquet file.
   - `--output FILE`: Path to the output Parquet file.
   - `--recursive / --no-recursive`: Search subdirectories (Default: True).
   - `--include GLOB`: Pattern to match report files (Default: `*.report`).
-- **Implementation Details:**
-  - Sort by `[year, week, sample_id, t_id]`.
-  - Compress with `zstd` (level 3).
-  - Extract `sample_id` from filename (base name before all extensions).
-  - Validate `sample_id` using `parse_sample_id()`.
-  - Include `source_file` column for provenance (relative path).
-  - **Write global Parquet metadata** (version, command, timestamp, absolute input path, compression, sorting).
-
-#### `prune_parquet` (Future)
-Reduces columns in `<KRAKEN_PARQUET>` files (e.g., dropping k-mer strings after GBM feature calculation) to save space.
-
-### Data Manipulation Tools
+  - `--overwrite`: Overwrite the output file if it exists.
 
 #### `table`
 Outputs abundance tables with `t_id` as the index and samples (YYYY_WW) as columns.
@@ -172,55 +156,18 @@ Outputs abundance tables with `t_id` as the index and samples (YYYY_WW) as colum
   - `--mode`: `[taxon, clade, canonical]` (Default: `clade`)
   - `--output FILE`: Path to the output file (Supported: `.csv`, `.tsv`, `.parquet`). Format inferred from suffix.
   - `--taxonomy DIR`: JolTax cache directory (Required for `canonical` mode or `--clade` filtering).
-- **Filters (Optional):**
-  - `--exclude_samples FILE`: Text file, one ID per line. (Note: A warning is issued if any ID in this file is not found in the dataset).
-  - `--min_observed INT`: Taxon must be in at least INT samples (default: 25).
-  - `--min_reads INT`: Max value across samples must be >= INT (default: 50).
-  - `--clade INT`: Output only taxa rooted at this TaxID.
-- **Flags:**
-  - `--keep_unclassified`: (Default: False).
-  - `--proportions`: Output relative proportions instead of raw read counts.
-  - `--keep-composition`: (Only for `taxon` and `canonical` modes) Retains all filtered reads in a synthetic "Filtered classified" bin (`t_id = 4294967295`). This ensures the sample total reads remain constant even when filtering out large clades, allowing `--proportions` to calculate global relative abundances. Forces `--keep_unclassified`.
-
-- **Abundance Modes Explained:**
-  - `taxon`: Raw `taxon_reads` from the Kraken report. If `--proportions` is used, each column is divided by its sum, naturally summing to 1.0.
-  - `clade`: Raw `clade_reads` from the Kraken report (cumulative reads). **Caution:** This mode contains redundant counts. If `--proportions` is used, each row is divided by the true total reads of the sample (Max classified clade + Unclassified), meaning the column will *not* sum to 1.0, but each value represents the true proportion of the sample belonging to that clade.
-  - `canonical`: **Canonical Remainders**. Essentially taxon mode but where reads between canonical ranks have been pushed up to the nearest canonical ancestor (NCA). Eliminates double-counting while conserving mass balance. If `--proportions` is used, each column is divided by its sum, naturally summing to 1.0.
-    - Uses `clade_reads` as input.
-    - Identifies the Nearest Canonical Ancestor (NCA) for every node.
-    - **Non-canonical rank skipping:** Automatically "skips" non-canonical ranks (e.g., subspecies, subgenus) to attribute reads to the nearest standard parent (Canonical Rank Read Standardization).
-    - **Strict Validation:** If a `--clade` filter is used, the provided TaxID MUST belong to a standard canonical rank (Species, Genus, etc.).
-    - Subtracts the sum of all canonical child clades from the parent's clade count.
-    - Corrects for "skipped ranks" and non-canonical assignments (e.g., `subgenus`).
-    - The sum of all remainders in a sample exactly equals the total reads.
-
-#### `coda` (Future)
-A planned suite of commands dedicated to Compositional Data Analysis (CoDA). This will likely include transformations like Centered Log Ratio (CLR) and robust zero-replacement strategies (e.g., Bayesian multiplicative replacement). For now, it is recommended to export the raw abundance tables and use specialized CoDA packages in R or Python (e.g., `skbio`).
+  - `--overwrite`: Overwrite the output file if it exists.
 
 #### `extract_reads`
 Streams `<KRAKEN_PARQUET>` to extract reads into FASTQ format with high throughput and a constant memory profile.
 - **Inputs:** `<KRAKEN_PARQUET>` file or directory.
-- **Performance Features:**
-    - **Vectorized Writes:** Pre-compiles FASTQ records into binary byte-blocks for maximum I/O throughput.
-    - **Memory Chunking:** Processes large taxon groups in 50,000-read slices to prevent RAM spikes (OOM safety).
-    - **Handle Management:** Uses an LRU (Least Recently Used) cache for file handles to prevent "Too many open files" OS errors.
 - **Arguments:**
   - `--taxonomy DIR`: JolTax cache directory (Required).
   - `--tax_id LIST`: Comma-separated TaxIDs to extract.
   - `--output-dir DIR`: Directory to save FASTQ files.
   - `--mode [clade, taxon]`: Extraction mode (Default: clade).
   - `--combine-samples`: If True, merges all samples into one file per TaxID.
-- **Temporal Filters:**
-  - `--year-start`, `--year-end` (Optional)
-  - `--week-start`, `--week-end` (Optional)
-  - Interval logic: `(year, week) >= (start) AND (year, week) <= (end)`.
-- **Naming Convention:**
-  - Single Sample: `{sample_id}_{mode}_{tax_id}_{ShortName}_R[1/2].fastq.gz`
-  - Combined: `combined_{mode}_{tax_id}_{ShortName}_{RangeTag}_R[1/2].fastq.gz`
-  - `ShortName`: 
-    - >1 word: First two words, 3 letters each, PascalCase (e.g., "Homo sapiens" -> "HomSap").
-    - 1 word: Use whole word.
-  - `RangeTag`: e.g., `2013W50-to-2014W02` (Only for combined files when time filtering is active).
+  - `--overwrite`: Overwrite existing files in the output directory.
 
 #### `annotate_table`
 Amends `<RAW_TABLE>` with JolTax lineage metadata and outputs `<ANNOTATED_TABLE>`.
@@ -229,12 +176,7 @@ Amends `<RAW_TABLE>` with JolTax lineage metadata and outputs `<ANNOTATED_TABLE>
   - `--taxonomy DIR`: JolTax cache directory (Required).
   - `--output FILE`: Path to save the annotated table.
   - `--metadata FILE`: (Multiple allowed) Path to external metadata files to join.
-- **Implementation Details:**
-  - Uses `JolTree.annotate()` to inject `t_` prefixed taxonomic columns.
-  - Left-joins external metadata files, automatically resolving column collisions by appending the filename stem.
-  - Calculates `median_signal` and `mean_signal` across sample columns.
-  - Sorts rows hierarchically across canonical taxonomic ranks (Domain/Superkingdom -> Species).
-  - Column Order: Taxonomy -> External Metadata -> Summary Stats -> Abundance Matrix.
+  - `--overwrite`: Overwrite the output file if it exists.
 
 #### `to_krona`
 Generates Krona plots from abundance tables. Needs further discussion.

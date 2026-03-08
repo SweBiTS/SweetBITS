@@ -69,7 +69,8 @@ def convert_kraken_logic(
     output_file: Path,
     r1_file: Optional[Path] = None,
     r2_file: Optional[Path] = None,
-    cores: Optional[int] = None
+    cores: Optional[int] = None,
+    overwrite: bool = False
 ) -> Dict[str, Any]:
     """
     Converts Kraken output and FASTQ files into a highly compressed, sorted KRAKEN_PARQUET.
@@ -83,6 +84,7 @@ def convert_kraken_logic(
         r1_file     : Optional path to the R1 FASTQ file (.fastq or .gz).
         r2_file     : Optional path to the R2 FASTQ file (.fastq or .gz).
         cores       : Number of threads to assign to Polars for out-of-core sorting.
+        overwrite   : Whether to overwrite the output file if it exists.
 
     Returns:
         A dictionary containing processing statistics:
@@ -92,8 +94,12 @@ def convert_kraken_logic(
         - 'output_file'      : Path to the generated Parquet file.
 
     Raises:
-        RuntimeError : If the FASTQ files are fundamentally out of sync with the Kraken file.
+        RuntimeError    : If the FASTQ files are fundamentally out of sync with the Kraken file.
+        FileExistsError : If output_file exists and overwrite is False.
     """
+    if output_file.exists() and not overwrite:
+        raise FileExistsError(f"Output file '{output_file}' already exists. Use --overwrite to replace it.")
+
     if cores:
         os.environ["POLARS_MAX_THREADS"] = str(cores)
         

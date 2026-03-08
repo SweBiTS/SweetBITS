@@ -68,7 +68,8 @@ def main():
 @click.option("--output", "-o", type=click.Path(path_type=Path), required=True, help="Path to output Parquet file.")
 @click.option("--recursive/--no-recursive", default=True, help="Search subdirectories (Default: True).")
 @click.option("--include", "-i", default="*.report", help="Pattern to match report files (Default: *.report).")
-def gather_reports(directory, output, recursive, include):
+@click.option("--overwrite", is_flag=True, help="Overwrite output file if it exists.")
+def gather_reports(directory, output, recursive, include, overwrite):
     """
     Finds and merges multiple 8-column Kraken reports into a single Polars-optimized 
     Parquet file, including provenance and temporal metadata.
@@ -83,7 +84,8 @@ def gather_reports(directory, output, recursive, include):
             input_dir=directory,
             output_file=output,
             recursive=recursive,
-            include_pattern=include
+            include_pattern=include,
+            overwrite=overwrite
         )
         summary["status"] = "Success"
         summary["output_file"] = str(output)
@@ -105,7 +107,8 @@ def gather_reports(directory, output, recursive, include):
 @click.option("--proportions", is_flag=True, help="Output relative proportions instead of raw reads.")
 @click.option("--keep-composition", is_flag=True, help="Retain filtered reads as 'Filtered classified' to preserve global total reads. Forces --keep-unclassified.")
 @click.option("--cores", type=int, help="Number of CPU cores to use (Default: all available).")
-def table(input_parquet, output, mode, taxonomy, exclude_samples, min_observed, min_reads, clade, keep_unclassified, proportions, keep_composition, cores):
+@click.option("--overwrite", is_flag=True, help="Overwrite output file if it exists.")
+def table(input_parquet, output, mode, taxonomy, exclude_samples, min_observed, min_reads, clade, keep_unclassified, proportions, keep_composition, cores, overwrite):
     """
     Outputs abundance tables with TaxIDs as rows and samples (YYYY_WW) as columns.
     Supports filtering by clade, minimum occupancy, and read depth.
@@ -131,7 +134,8 @@ def table(input_parquet, output, mode, taxonomy, exclude_samples, min_observed, 
             keep_unclassified=keep_unclassified,
             proportions=proportions,
             keep_composition=keep_composition,
-            cores=cores
+            cores=cores,
+            overwrite=overwrite
         )
         summary["status"] = "Success"
         print_footer(start_time, summary)
@@ -151,7 +155,8 @@ def table(input_parquet, output, mode, taxonomy, exclude_samples, min_observed, 
 @click.option("--year-end", type=int, help="End year for temporal filtering.")
 @click.option("--week-end", type=int, help="End week for temporal filtering.")
 @click.option("--cores", type=int, help="Number of CPU cores to use (Default: all available).")
-def extract_reads(input_path, taxonomy, tax_id, output_dir, mode, combine_samples, year_start, week_start, year_end, week_end, cores):
+@click.option("--overwrite", is_flag=True, help="Overwrite output files if they exist.")
+def extract_reads(input_path, taxonomy, tax_id, output_dir, mode, combine_samples, year_start, week_start, year_end, week_end, cores, overwrite):
     """
     Extracts reads from Kraken-annotated Parquet files into FASTQ or text format.
     """
@@ -179,7 +184,8 @@ def extract_reads(input_path, taxonomy, tax_id, output_dir, mode, combine_sample
             week_start=week_start,
             year_end=year_end,
             week_end=week_end,
-            cores=cores
+            cores=cores,
+            overwrite=overwrite
         )
         summary["status"] = "Success"
         print_footer(start_time, summary)
@@ -193,7 +199,8 @@ def extract_reads(input_path, taxonomy, tax_id, output_dir, mode, combine_sample
 @click.option("--output", "-o", type=click.Path(path_type=Path), required=True, help="Path to output file (.csv, .tsv, .parquet).")
 @click.option("--metadata", "-m", type=click.Path(exists=True, path_type=Path), multiple=True, help="Path to external metadata files (can be used multiple times).")
 @click.option("--cores", type=int, help="Number of CPU cores to use (Default: all available).")
-def annotate_table(input_table, taxonomy, output, metadata, cores):
+@click.option("--overwrite", is_flag=True, help="Overwrite output file if it exists.")
+def annotate_table(input_table, taxonomy, output, metadata, cores, overwrite):
     """
     Annotates a numeric <RAW_TABLE> with full taxonomic lineages and sorts
     the rows hierarchically. Also computes summary abundance statistics and
@@ -210,7 +217,8 @@ def annotate_table(input_table, taxonomy, output, metadata, cores):
             taxonomy_dir=taxonomy,
             output_file=output,
             metadata_files=list(metadata) if metadata else [],
-            cores=cores
+            cores=cores,
+            overwrite=overwrite
         )
         summary["status"] = "Success"
         print_footer(start_time, summary)
@@ -243,7 +251,8 @@ def inspect(parquet_file):
 @click.option("--r1", type=click.Path(exists=True, path_type=Path), help="Path to R1 FASTQ file.")
 @click.option("--r2", type=click.Path(exists=True, path_type=Path), help="Path to R2 FASTQ file.")
 @click.option("--cores", type=int, help="Number of CPU cores to use (Default: all available).")
-def convert_kraken(kraken_file, output, r1, r2, cores):
+@click.option("--overwrite", is_flag=True, help="Overwrite output file if it exists.")
+def convert_kraken(kraken_file, output, r1, r2, cores, overwrite):
     """
     Converts Kraken output and FASTQ files into high-performance KRAKEN_PARQUET files.
     """
@@ -258,7 +267,8 @@ def convert_kraken(kraken_file, output, r1, r2, cores):
             output_file=output,
             r1_file=r1,
             r2_file=r2,
-            cores=cores
+            cores=cores,
+            overwrite=overwrite
         )
         summary["status"] = "Success"
         print_footer(start_time, summary)

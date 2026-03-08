@@ -30,7 +30,8 @@ def generate_table_logic(
     keep_unclassified: bool = False,
     proportions: bool = False,
     keep_composition: bool = False,
-    cores: Optional[int] = None
+    cores: Optional[int] = None,
+    overwrite: bool = False
 ) -> Dict[str, Any]:
     """
     Generates a wide-format abundance table from a merged REPORT_PARQUET file.
@@ -60,6 +61,7 @@ def generate_table_logic(
                             synthetic 'Filtered classified' bin to preserve the global read total
                             for accurate relative abundance calculations.
         cores             : Number of CPU cores to use for Polars operations.
+        overwrite         : Whether to overwrite the output file if it exists.
 
     Returns:
         A dictionary containing processing statistics:
@@ -72,7 +74,11 @@ def generate_table_logic(
         ValueError        : If required parameters are missing for the selected mode, or if 
                             keep_composition is used with an incompatible mode.
         FileNotFoundError : If the input file does not exist.
+        FileExistsError   : If output_file exists and overwrite is False.
     """
+    if output_file.exists() and not overwrite:
+        raise FileExistsError(f"Output file '{output_file}' already exists. Use --overwrite to replace it.")
+
     if cores:
         import os
         os.environ["POLARS_MAX_THREADS"] = str(cores)

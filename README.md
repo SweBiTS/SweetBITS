@@ -16,7 +16,7 @@ pip install -e /home/daniel/devel/SweetBITS
 
 ## Commands Overview
 
-SweetBITS provides several high-performance tools for processing Kraken 2 outputs:
+SweetBITS provides several high-performance tools for processing Kraken 2 outputs. All tools that generate output files feature strict **overwrite protection**; use the `--overwrite` flag to replace existing files.
 
 - `gather-reports`: Merges multiple Kraken reports into a single, Polars-optimized Parquet file with full provenance metadata. Supports flexible SweBITS sample IDs (e.g., `Ki-2022_20_001`, `Lj_2013_1_142`, `Ki-2022-01-1`).
     - *Automatic Detection:* Handles both newer 8-column (with minimizers) and legacy 6-column Kraken reports automatically.

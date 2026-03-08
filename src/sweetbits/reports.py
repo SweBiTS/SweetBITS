@@ -95,7 +95,8 @@ def gather_reports_logic(
     input_dir: Path,
     output_file: Path,
     recursive: bool = True,
-    include_pattern: str = "*.report"
+    include_pattern: str = "*.report",
+    overwrite: bool = False
 ) -> Dict[str, Any]:
     """
     Finds and merges Kraken report files into a single long-format Parquet file.
@@ -112,6 +113,7 @@ def gather_reports_logic(
         output_file     : Path to the output Parquet file.
         recursive       : Whether to search subdirectories. Defaults to True.
         include_pattern : Glob pattern to match files. Defaults to "*.report".
+        overwrite       : Whether to overwrite the output file if it exists.
 
     Returns:
         A dictionary containing processing statistics:
@@ -123,7 +125,11 @@ def gather_reports_logic(
     Raises:
         FileNotFoundError : If no files are found matching the pattern.
         ValueError        : If mixed report formats are detected in the same batch.
+        FileExistsError   : If output_file exists and overwrite is False.
     """
+    if output_file.exists() and not overwrite:
+        raise FileExistsError(f"Output file '{output_file}' already exists. Use --overwrite to replace it.")
+
     search_path = "**/" + include_pattern if recursive else include_pattern
     report_files = sorted(list(input_dir.glob(search_path)))
     

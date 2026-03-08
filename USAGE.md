@@ -2,6 +2,8 @@
 
 This guide provides practical examples for the SweetBITS command-line tools.
 
+**Overwrite Protection:** All tools that generate output files will refuse to overwrite an existing file unless the `--overwrite` flag is provided.
+
 ## 1. Merging Kraken Reports (`gather-reports`)
 
 Merge multiple `.report` files from a directory into a single optimized Parquet file.
@@ -9,6 +11,9 @@ Merge multiple `.report` files from a directory into a single optimized Parquet 
 ```bash
 # Basic usage
 sweetbits gather-reports /path/to/reports --output merged_reports.parquet
+
+# Overwrite an existing output file
+sweetbits gather-reports /path/to/reports --output existing.parquet --overwrite
 
 # Recursive search with specific pattern
 sweetbits gather-reports /path/to/data --output results.parquet --recursive --include "*.kraken.report"
@@ -96,6 +101,13 @@ sweetbits extract-reads /path/to/parquet_dir \
     --taxonomy /path/to/joltax_cache \
     --tax-id "9606,10090" \
     --output-dir ./extracted_reads
+
+# Overwrite existing files in the output directory
+sweetbits extract-reads /path/to/parquet_dir \
+    --taxonomy /path/to/joltax_cache \
+    --tax-id "9606" \
+    --output-dir ./existing_dir \
+    --overwrite
 
 # Combine all samples into one file per TaxID with temporal filtering
 sweetbits extract-reads /path/to/data \

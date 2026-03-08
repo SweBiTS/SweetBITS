@@ -111,7 +111,8 @@ def extract_reads_logic(
     week_start: Optional[int] = None,
     year_end: Optional[int] = None,
     week_end: Optional[int] = None,
-    cores: Optional[int] = None
+    cores: Optional[int] = None,
+    overwrite: bool = False
 ) -> Dict[str, Any]:
     """
     Streams KRAKEN_PARQUET files and extracts reads into FASTQ or text format.
@@ -128,9 +129,13 @@ def extract_reads_logic(
         year_end        : Optional end year for filtering.
         week_end        : Optional end week for filtering.
         cores           : Number of CPU cores to use for Polars operations.
+        overwrite       : Whether to overwrite existing files in output_dir.
 
     Returns:
         A dictionary containing extraction statistics.
+
+    Raises:
+        FileExistsError : If output files already exist and overwrite is False.
     """
     # 1. Setup
     if cores:
@@ -168,19 +173,13 @@ def extract_reads_logic(
         we = f"W{week_end:02}" if week_end else ""
         range_tag = f"_{ys}{ws}-to-{ye}{we}"
 
-    # 2. Processing
+    # 2. Overwrite Protection & Initialization
+    # Since we create files dynamically, we check for potential collisions upfront.
+    # If not overwriting, we check if any files we might create already exist.
     total_reads_extracted = 0
     samples_processed = 0
-    
-    # We initialize handle_manager as None and set it per-batch
     handle_manager = None
     
-    # If combining samples, we can pre-initialize all handles to ensure empty files exist
-    if combine_samples:
-        # We don't know has_fastq yet until we read the first file, 
-        # so we'll defer this slightly or assume consistency.
-        pass
-
     try:
         for pfile in parquet_files:
             # FAST-FAIL: Quick filename-based temporal check before scanning Parquet
@@ -206,12 +205,34 @@ def extract_reads_logic(
             if missing:
                 raise ValueError(f"File {pfile.name} is missing required columns: {missing}")
 
-            # Initialize or update handle manager if extension changed
+            # Initialize handle manager if needed
             if handle_manager is None or handle_manager.extension != ext:
                 if handle_manager: handle_manager.close_all()
                 handle_manager = FastqHandleManager(output_dir, extension=ext)
                 
-                # Pre-initialize combined handles if this is the first file
+                # Check for existing files if overwrite is False
+                if not overwrite:
+                    existing_files = []
+                    if combine_samples:
+                        for tid in tax_ids:
+                            tmeta = taxon_meta[tid]
+                            fname_base = f"combined_{mode}_{tid}_{tmeta['short_name']}{range_tag}"
+                            suffixes = ["_R1", "_R2"] if has_fastq else [""]
+                            for s in suffixes:
+                                path = output_dir / f"{fname_base}{s}{ext}"
+                                if path.exists(): existing_files.append(path.name)
+                    else:
+                        # For per-sample, we only know the filenames as we iterate.
+                        # We'll check for each sample before initializing its handles.
+                        pass
+                    
+                    if existing_files:
+                        raise FileExistsError(
+                            f"Output files already exist in {output_dir}: {', '.join(existing_files)}. "
+                            "Use --overwrite to replace them."
+                        )
+
+                # Pre-initialize combined handles
                 if combine_samples:
                     for tid in tax_ids:
                         tmeta = taxon_meta[tid]
@@ -222,8 +243,23 @@ def extract_reads_logic(
                         else:
                             handle_manager.get_handle(fname_base)
 
-            # Pre-initialize per-sample handles to ensure empty files exist for all requests
+            # Per-sample overwrite check and initialization
             if not combine_samples:
+                if not overwrite:
+                    existing_files = []
+                    for tid in tax_ids:
+                        tmeta = taxon_meta[tid]
+                        fname_base = f"{info['sample_id']}_{mode}_{tid}_{tmeta['short_name']}"
+                        suffixes = ["_R1", "_R2"] if has_fastq else [""]
+                        for s in suffixes:
+                            path = output_dir / f"{fname_base}{s}{ext}"
+                            if path.exists(): existing_files.append(path.name)
+                    if existing_files:
+                        raise FileExistsError(
+                            f"Output files for sample '{info['sample_id']}' already exist: {', '.join(existing_files)}. "
+                            "Use --overwrite to replace them."
+                        )
+
                 for tid in tax_ids:
                     tmeta = taxon_meta[tid]
                     fname_base = f"{info['sample_id']}_{mode}_{tid}_{tmeta['short_name']}"
@@ -233,7 +269,7 @@ def extract_reads_logic(
                     else:
                         handle_manager.get_handle(fname_base)
 
-            # Stream matching records
+            # 3. Stream Matching Records
             lf = pl.scan_parquet(pfile)
             lf = lf.filter(pl.col("t_id").is_in(list(all_target_tids)))
             

@@ -19,7 +19,8 @@ def annotate_table_logic(
     taxonomy_dir: Path,
     output_file: Path,
     metadata_files: Optional[List[Path]] = None,
-    cores: Optional[int] = None
+    cores: Optional[int] = None,
+    overwrite: bool = False
 ) -> Dict[str, Any]:
     """
     Annotates a raw abundance table with taxonomic lineages and external metadata.
@@ -34,6 +35,7 @@ def annotate_table_logic(
         output_file    : Path where the annotated table will be saved.
         metadata_files : Optional list of paths to external metadata files to join.
         cores          : Number of CPU cores to use for Polars operations.
+        overwrite      : Whether to overwrite the output file if it exists.
 
     Returns:
         A dictionary containing processing statistics:
@@ -41,8 +43,12 @@ def annotate_table_logic(
         - 'output_file'    : Path to the saved annotated table.
 
     Raises:
-        ValueError : If a metadata file lacks a 't_id' column or if an unsupported format is used.
+        ValueError      : If a metadata file lacks a 't_id' column or if an unsupported format is used.
+        FileExistsError : If output_file exists and overwrite is False.
     """
+    if output_file.exists() and not overwrite:
+        raise FileExistsError(f"Output file '{output_file}' already exists. Use --overwrite to replace it.")
+
     if metadata_files is None:
         metadata_files = []
 
