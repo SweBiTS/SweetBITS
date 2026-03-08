@@ -76,12 +76,12 @@ def annotate_table_logic(
         m_ext = m_path.suffix.lower()
         if m_ext == ".parquet":
             m_df = pl.read_parquet(m_path)
-        elif m_ext in [".tsv", ".txt"]:
+        elif m_ext == ".tsv":
             m_df = pl.read_csv(m_path, separator="\t")
         elif m_ext == ".csv":
             m_df = pl.read_csv(m_path)
         else:
-            raise ValueError(f"Unsupported metadata file format '{m_ext}' for {m_path.name}. Supported formats are .csv, .tsv, .txt, .parquet")
+            raise ValueError(f"Unsupported metadata file format '{m_ext}' for {m_path.name}. Supported formats are .csv, .tsv, .parquet")
 
         if "t_id" not in m_df.columns:
             raise ValueError(f"Metadata file {m_path.name} must contain a 't_id' column.")
