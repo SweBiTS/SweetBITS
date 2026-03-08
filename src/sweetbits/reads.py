@@ -5,6 +5,7 @@ Logic for streaming and extracting reads from Kraken-annotated Parquet files.
 
 import polars as pl
 import gzip
+import os
 from pathlib import Path
 from typing import Optional, List, Dict, Any, IO, Tuple
 from collections import OrderedDict
@@ -135,12 +136,21 @@ def extract_reads_logic(
         A dictionary containing extraction statistics.
 
     Raises:
-        FileExistsError : If output files already exist and overwrite is False.
+        FileExistsError : If output directory already exists and overwrite is False.
     """
     # 1. Setup
     if cores:
-        import os
         os.environ["POLARS_MAX_THREADS"] = str(cores)
+
+    # Overwrite Protection
+    if not overwrite and output_dir.exists():
+        # Check if the directory is empty or if it's a custom folder
+        is_current_dir = output_dir.resolve() == Path.cwd().resolve()
+        if not is_current_dir or any(output_dir.iterdir()):
+            raise FileExistsError(
+                f"Output directory '{output_dir}' already exists and is not empty. "
+                "Use --overwrite to replace existing data."
+            )
 
     tree = JolTree.load(str(taxonomy_dir))
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -173,9 +183,7 @@ def extract_reads_logic(
         we = f"W{week_end:02}" if week_end else ""
         range_tag = f"_{ys}{ws}-to-{ye}{we}"
 
-    # 2. Overwrite Protection & Initialization
-    # Since we create files dynamically, we check for potential collisions upfront.
-    # If not overwriting, we check if any files we might create already exist.
+    # 2. Processing
     total_reads_extracted = 0
     samples_processed = 0
     handle_manager = None
@@ -210,28 +218,6 @@ def extract_reads_logic(
                 if handle_manager: handle_manager.close_all()
                 handle_manager = FastqHandleManager(output_dir, extension=ext)
                 
-                # Check for existing files if overwrite is False
-                if not overwrite:
-                    existing_files = []
-                    if combine_samples:
-                        for tid in tax_ids:
-                            tmeta = taxon_meta[tid]
-                            fname_base = f"combined_{mode}_{tid}_{tmeta['short_name']}{range_tag}"
-                            suffixes = ["_R1", "_R2"] if has_fastq else [""]
-                            for s in suffixes:
-                                path = output_dir / f"{fname_base}{s}{ext}"
-                                if path.exists(): existing_files.append(path.name)
-                    else:
-                        # For per-sample, we only know the filenames as we iterate.
-                        # We'll check for each sample before initializing its handles.
-                        pass
-                    
-                    if existing_files:
-                        raise FileExistsError(
-                            f"Output files already exist in {output_dir}: {', '.join(existing_files)}. "
-                            "Use --overwrite to replace them."
-                        )
-
                 # Pre-initialize combined handles
                 if combine_samples:
                     for tid in tax_ids:
@@ -243,23 +229,8 @@ def extract_reads_logic(
                         else:
                             handle_manager.get_handle(fname_base)
 
-            # Per-sample overwrite check and initialization
+            # Pre-initialize per-sample handles
             if not combine_samples:
-                if not overwrite:
-                    existing_files = []
-                    for tid in tax_ids:
-                        tmeta = taxon_meta[tid]
-                        fname_base = f"{info['sample_id']}_{mode}_{tid}_{tmeta['short_name']}"
-                        suffixes = ["_R1", "_R2"] if has_fastq else [""]
-                        for s in suffixes:
-                            path = output_dir / f"{fname_base}{s}{ext}"
-                            if path.exists(): existing_files.append(path.name)
-                    if existing_files:
-                        raise FileExistsError(
-                            f"Output files for sample '{info['sample_id']}' already exist: {', '.join(existing_files)}. "
-                            "Use --overwrite to replace them."
-                        )
-
                 for tid in tax_ids:
                     tmeta = taxon_meta[tid]
                     fname_base = f"{info['sample_id']}_{mode}_{tid}_{tmeta['short_name']}"
