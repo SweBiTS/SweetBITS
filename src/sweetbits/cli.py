@@ -2,6 +2,10 @@ import click
 import time
 import sys
 import os
+try:
+    import resource
+except ImportError:
+    resource = None
 from pathlib import Path
 from datetime import datetime
 from sweetbits import __version__
@@ -35,6 +39,17 @@ def print_footer(start_time, summary_dict=None):
             label = k.replace("_", " ").title()
             click.echo(f"{label:20}: {v}", err=True)
             
+    # Report Peak Memory (Unix only)
+    if resource:
+        usage_self = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+        usage_child = resource.getrusage(resource.RUSAGE_CHILDREN).ru_maxrss
+        total_units = usage_self + usage_child
+        
+        # On Linux ru_maxrss is in KB, on macOS it is in Bytes
+        divisor = 1024 if sys.platform != 'darwin' else 1024 * 1024
+        total_mb = total_units / divisor
+        click.echo(f"{'Peak Memory':20}: {total_mb:.2f} MB", err=True)
+
     click.echo(f"{'Time elapsed':20}: {elapsed:.2f}s", err=True)
     click.echo(f"{'End time':20}: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}", err=True)
 
