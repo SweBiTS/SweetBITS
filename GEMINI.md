@@ -246,6 +246,7 @@ Prints the global metadata stored in a SweetBITS-generated Parquet file.
 All SweetBITS tools that read `<KRAKEN_PARQUET>` or `<REPORT_PARQUET>` files must strictly validate the input using `validate_sweetbits_parquet()`.
 - **Requirements:**
     - Must contain `sweetbits_version`.
+    - Must pass **Minimum Compatible Version (MCV)** checking. The version in the file must be $\ge$ the `MINIMUM_COMPATIBLE_VERSION` hardcoded in `metadata.py` and $\le$ the currently running SweetBITS version.
     - Must match the expected `file_type`.
     - Must contain all required columns for the specific operation.
 - **Failure:** Tools must raise a clear `ValueError` explaining the mismatch to prevent processing of incompatible or non-toolkit data.
@@ -290,4 +291,5 @@ All SweetBITS tools that read `<KRAKEN_PARQUET>` or `<REPORT_PARQUET>` files mus
 4. [x] Implement `extract_reads` for FASTQ streaming.
 5. [x] Implement `inspect` for metadata viewing.
 6. [x] Implement `annotate_table` for taxonomic annotation and sorting.
-7. [ ] TBD...
+7. [x] Implement Parquet version compatibility checking.
+8. [ ] TBD...
