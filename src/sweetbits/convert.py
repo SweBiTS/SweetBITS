@@ -106,7 +106,16 @@ def convert_kraken_logic(
     sample_id = info["sample_id"]
     year, week = info["year"], info["week"]
 
-    has_fastq = False if no_fastq else (r1_file is not None)
+    if no_fastq:
+        has_fastq = False
+    else:
+        # Enforce project requirement for paired-end data
+        if (r1_file is not None) != (r2_file is not None):
+            raise ValueError(
+                "SweetBITS requires paired-end data. Both --r1 and --r2 FASTQ files "
+                "must be provided, or neither if using --no-fastq."
+            )
+        has_fastq = (r1_file is not None)
     
     # 2. Stream Initialization
     # We use independent OS-level decompression streams to avoid the Python GIL
@@ -117,9 +126,8 @@ def convert_kraken_logic(
     if has_fastq:
         r1_stream, r1_proc = _open_text_stream(r1_file)
         r1_iter = _fastq_iterator(r1_stream)
-        if r2_file:
-            r2_stream, r2_proc = _open_text_stream(r2_file)
-            r2_iter = _fastq_iterator(r2_stream)
+        r2_stream, r2_proc = _open_text_stream(r2_file)
+        r2_iter = _fastq_iterator(r2_stream)
 
     curr_r1 = next(r1_iter) if r1_iter else None
     curr_r2 = next(r2_iter) if r2_iter else None

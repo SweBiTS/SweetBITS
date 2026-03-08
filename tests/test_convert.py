@@ -71,3 +71,11 @@ def test_sync_error(mock_files, tmp_path):
     out_file = tmp_path / "out_bad.parquet"
     with pytest.raises(RuntimeError, match="out of sync"):
         convert_kraken_logic(k_file, out_file, r1_file=bad_r1, r2_file=r2_file)
+
+def test_missing_r2_error(mock_files, tmp_path):
+    """Tests that providing only R1 raises a ValueError."""
+    k_file, r1_file, _ = mock_files
+    out_file = tmp_path / "fail.parquet"
+    
+    with pytest.raises(ValueError, match="Both --r1 and --r2 FASTQ files must be provided"):
+        convert_kraken_logic(k_file, out_file, r1_file=r1_file)
