@@ -33,7 +33,6 @@ def print_splash():
     click.echo(click.style(" Version:   ", fg="bright_black") + click.style(f"v{__version__}", fg="yellow"), err=True)
     click.echo("", err=True)
     click.echo("-" * 55, err=True)
-    click.echo("", err=True)
 
 def print_invocation_info():
     """Prints technical details about the current execution."""
