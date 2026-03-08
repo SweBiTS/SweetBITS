@@ -63,14 +63,15 @@ def is_in_temporal_range(
 
 class FastqHandleManager:
     """
-    Manages open GZIP handles using an LRU cache strategy.
+    Manages open GZIP or Text handles using an LRU cache strategy.
     
     This prevents 'Too many open files' OS errors while minimizing the 
-    overhead of opening/closing gzip streams for common targets.
+    overhead of opening/closing streams for common targets.
     """
-    def __init__(self, output_dir: Path, max_handles: int = 400):
+    def __init__(self, output_dir: Path, max_handles: int = 400, extension: str = ".fastq.gz"):
         self.output_dir = output_dir
         self.max_handles = max_handles
+        self.extension = extension
         self.handles: OrderedDict[str, IO] = OrderedDict()
 
     def get_handle(self, name: str) -> IO:
@@ -84,7 +85,12 @@ class FastqHandleManager:
             _, oldest_handle = self.handles.popitem(last=False)
             oldest_handle.close()
             
-        handle = gzip.open(self.output_dir / f"{name}.fastq.gz", "ab")
+        # If extension is fastq.gz, use gzip, otherwise use standard open
+        if self.extension.endswith(".gz"):
+            handle = gzip.open(self.output_dir / f"{name}{self.extension}", "ab")
+        else:
+            handle = open(self.output_dir / f"{name}{self.extension}", "ab")
+            
         self.handles[name] = handle
         return handle
 
@@ -107,13 +113,13 @@ def extract_reads_logic(
     week_end: Optional[int] = None
 ) -> Dict[str, Any]:
     """
-    Streams KRAKEN_PARQUET files and extracts reads into FASTQ format.
+    Streams KRAKEN_PARQUET files and extracts reads into FASTQ or text format.
 
     Args:
         input_path      : Path to a single Parquet file or a directory of files.
         taxonomy_dir    : Path to the JolTax cache directory.
         tax_ids         : List of TaxIDs to extract reads for.
-        output_dir      : Directory where FASTQ.gz files will be saved.
+        output_dir      : Directory where output files will be saved.
         mode            : Extraction mode ('taxon' or 'clade').
         combine_samples : Whether to merge reads from all samples into one file per TaxID.
         year_start      : Optional start year for filtering.
@@ -127,7 +133,6 @@ def extract_reads_logic(
     # 1. Setup
     tree = JolTree.load(str(taxonomy_dir))
     output_dir.mkdir(parents=True, exist_ok=True)
-    handle_manager = FastqHandleManager(output_dir)
     
     if input_path.is_dir():
         parquet_files = sorted(list(input_path.glob("*.parquet")))
@@ -160,7 +165,11 @@ def extract_reads_logic(
     # 2. Processing
     total_reads_extracted = 0
     samples_processed = 0
-    required_cols = ["sample_id", "read_id", "r1_seq", "r1_qual", "r2_seq", "r2_qual", "t_id", "year", "week"]
+    
+    # We initialize handle_manager as None and set it per-file or per-batch
+    # to handle potential mixed schema if needed, but we'll assume consistency
+    # for the handle manager within a run if possible.
+    handle_manager = None
     
     try:
         for pfile in parquet_files:
@@ -171,14 +180,34 @@ def extract_reads_logic(
                     continue
 
             # Validate metadata and columns
-            metadata = validate_sweetbits_parquet(pfile, expected_type="KRAKEN_PARQUET", required_columns=required_cols)
-            data_standard = metadata.get("data_standard", "GENERIC")
+            # We first check common columns, then deduce sequence columns based on metadata
+            schema = pl.scan_parquet(pfile).schema
+            metadata = validate_sweetbits_parquet(pfile, expected_type="KRAKEN_PARQUET")
+            has_fastq = metadata.get("has_fastq") == "True"
+            
+            required_cols = ["sample_id", "read_id", "t_id", "year", "week"]
+            if has_fastq:
+                required_cols.extend(["r1_seq", "r1_qual", "r2_seq", "r2_qual"])
+                ext = ".fastq.gz"
+            else:
+                ext = ".txt"
+
+            # Check if required columns are in schema
+            missing = [c for c in required_cols if c not in schema]
+            if missing:
+                raise ValueError(f"File {pfile.name} is missing required columns: {missing}")
+
+            # Initialize or update handle manager if extension changed (mixed batch)
+            if handle_manager is None or handle_manager.extension != ext:
+                if handle_manager: handle_manager.close_all()
+                handle_manager = FastqHandleManager(output_dir, extension=ext)
 
             # Stream matching records
             lf = pl.scan_parquet(pfile)
             lf = lf.filter(pl.col("t_id").is_in(list(all_target_tids)))
             
             # Apply temporal filters at scan level for SWEBITS standard
+            data_standard = metadata.get("data_standard", "GENERIC")
             if data_standard == "SWEBITS":
                 if year_start: lf = lf.filter(pl.col("year") >= year_start)
                 if year_end:   lf = lf.filter(pl.col("year") <= year_end)
@@ -191,7 +220,7 @@ def extract_reads_logic(
             
             # Group by Sample and TaxID
             for (sid, tid_internal), group in df.group_by(["sample_id", "t_id"]):
-                # Final precise temporal check
+                # Precise temporal check for the actual data
                 if data_standard == "SWEBITS":
                     row_meta = group.row(0, named=True)
                     if not is_in_temporal_range(row_meta['year'], row_meta['week'], year_start, week_start, year_end, week_end):
@@ -207,38 +236,43 @@ def extract_reads_logic(
                     continue
 
                 # MEMORY SAFEGUARD: Process massive groups in chunks of 50,000 reads.
-                # This prevents OOM errors on highly abundant taxa while maintaining
-                # high-throughput vectorized byte-block writing.
                 CHUNK_SIZE = 50_000
                 for chunk in group.iter_slices(CHUNK_SIZE):
-                    # PERFORMANCE: Pre-compile FASTQ strings into binary byte-blocks.
-                    records = list(zip(
-                        chunk["read_id"].to_list(),
-                        chunk["r1_seq"].to_list(),
-                        chunk["r1_qual"].to_list(),
-                        chunk["r2_seq"].to_list(),
-                        chunk["r2_qual"].to_list()
-                    ))
+                    num_reads_in_chunk = chunk.height
                     
-                    block_r1 = "".join([f"@{rid}\n{r1s}\n+\n{r1q}\n" for rid, r1s, r1q, r2s, r2q in records]).encode()
-                    block_r2 = "".join([f"@{rid}\n{r2s}\n+\n{r2q}\n" for rid, r1s, r1q, r2s, r2q in records]).encode()
-                    num_reads_in_chunk = len(records)
+                    if has_fastq:
+                        # PERFORMANCE: Pre-compile FASTQ strings into binary byte-blocks.
+                        records = list(zip(
+                            chunk["read_id"].to_list(),
+                            chunk["r1_seq"].to_list(),
+                            chunk["r1_qual"].to_list(),
+                            chunk["r2_seq"].to_list(),
+                            chunk["r2_qual"].to_list()
+                        ))
+                        
+                        block_r1 = "".join([f"@{rid}\n{r1s}\n+\n{r1q}\n" for rid, r1s, r1q, r2s, r2q in records]).encode()
+                        block_r2 = "".join([f"@{rid}\n{r2s}\n+\n{r2q}\n" for rid, r1s, r1q, r2s, r2q in records]).encode()
+                    else:
+                        # SKINNY MODE: Just pre-compile ID list
+                        block_ids = "\n".join(chunk["read_id"].to_list()).encode() + b"\n"
 
                     for requested_tid in matching_requests:
                         tmeta = taxon_meta[requested_tid]
                         
-                        # Generate base filename
                         if combine_samples:
                             fname_base = f"combined_{mode}_{requested_tid}_{tmeta['short_name']}{range_tag}"
                         else:
                             fname_base = f"{sid}_{mode}_{requested_tid}_{tmeta['short_name']}"
                         
-                        h1 = handle_manager.get_handle(f"{fname_base}_R1")
-                        h2 = handle_manager.get_handle(f"{fname_base}_R2")
-
-                        # Write the pre-compiled blocks instantly
-                        h1.write(block_r1)
-                        h2.write(block_r2)
+                        if has_fastq:
+                            h1 = handle_manager.get_handle(f"{fname_base}_R1")
+                            h2 = handle_manager.get_handle(f"{fname_base}_R2")
+                            h1.write(block_r1)
+                            h2.write(block_r2)
+                        else:
+                            h = handle_manager.get_handle(fname_base)
+                            h.write(block_ids)
+                            
                         total_reads_extracted += num_reads_in_chunk
             
             # If not combining, close handles after each sample to keep resources tight
@@ -246,10 +280,11 @@ def extract_reads_logic(
                 handle_manager.close_all()
 
     finally:
-        handle_manager.close_all()
+        if handle_manager:
+            handle_manager.close_all()
 
     return {
         "samples_processed": samples_processed,
-        "reads_extracted": total_reads_extracted,
+        "records_extracted": total_reads_extracted,
         "output_dir": str(output_dir)
     }
