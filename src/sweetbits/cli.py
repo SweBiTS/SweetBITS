@@ -83,26 +83,40 @@ def main(ctx, version):
         print_splash()
         ctx.exit()
 
-    # Only show splash if we are at the root level (no subcommand or subcommand is help)
-    # Check if we are running root help or root with no command
     is_help = any(arg in sys.argv for arg in ['-h', '--help'])
-    has_subcommand = any(arg in [cmd.name.replace('_', '-') for cmd in main.commands.values()] for arg in sys.argv)
+    # Need to check subcommands recursively for splash suppression, but keeping simple for now
+    # We will just suppress it if we are deeper than root.
+    has_subcommand = len(sys.argv) > 1 and sys.argv[1] not in ['-h', '--help', '--version']
 
     if ctx.invoked_subcommand is None:
         print_splash()
         click.echo(ctx.get_help())
         ctx.exit()
     elif is_help and not has_subcommand:
-        # This catch is for cases where click might still be processing help
         print_splash()
 
-@main.command(short_help="Merge Kraken reports into a single Parquet file.")
+@main.group(short_help="Ingest data into SweetBITS Parquet format.")
+def collect():
+    """Commands to parse and ingest output files from taxonomic classifiers."""
+    pass
+
+@collect.group(short_help="Ingest Kraken 2 output files.")
+def kraken():
+    """Commands specifically for parsing Kraken 2 reports and read classifications."""
+    pass
+
+@main.group(short_help="Generate usable outputs from SweetBITS data.")
+def produce():
+    """Commands to generate output artifacts like abundance tables and FASTQ files."""
+    pass
+
+@kraken.command(name="reports", short_help="Merge Kraken reports into a single Parquet file.")
 @click.argument("directory", type=click.Path(exists=True, file_okay=False, path_type=Path))
 @click.option("--output", "-o", type=click.Path(path_type=Path), required=True, help="Path to output Parquet file.")
 @click.option("--recursive/--no-recursive", default=True, help="Search subdirectories (Default: True).")
 @click.option("--include", "-i", default="*.report", help="Pattern to match report files (Default: *.report).")
 @click.option("--overwrite", is_flag=True, help="Overwrite output file if it exists.")
-def gather_reports(directory, output, recursive, include, overwrite):
+def collect_kraken_reports(directory, output, recursive, include, overwrite):
     """
     Finds and merges multiple 8-column Kraken reports into a single Polars-optimized 
     Parquet file, including provenance and temporal metadata.
@@ -128,7 +142,7 @@ def gather_reports(directory, output, recursive, include, overwrite):
         click.secho(f"Error: {str(e)}", fg="red", err=True)
         sys.exit(1)
 
-@main.command(short_help="Generate abundance tables from merged reports.")
+@produce.command(name="table", short_help="Generate abundance tables from merged reports.")
 @click.argument("input_parquet", type=click.Path(exists=True, path_type=Path))
 @click.option("--output", "-o", type=click.Path(path_type=Path), required=True, help="Path to output file (.csv, .tsv, .parquet).")
 @click.option("--mode", "-m", type=click.Choice(["taxon", "clade", "canonical"]), default="clade", help="Abundance mode (Default: clade).")
@@ -142,7 +156,7 @@ def gather_reports(directory, output, recursive, include, overwrite):
 @click.option("--keep-composition", is_flag=True, help="Retain filtered reads as 'Filtered classified' to preserve global total reads. Forces --keep-unclassified.")
 @click.option("--cores", type=int, help="Number of CPU cores to use (Default: all available).")
 @click.option("--overwrite", is_flag=True, help="Overwrite output file if it exists.")
-def table(input_parquet, output, mode, taxonomy, exclude_samples, min_observed, min_reads, clade, keep_unclassified, proportions, keep_composition, cores, overwrite):
+def produce_table(input_parquet, output, mode, taxonomy, exclude_samples, min_observed, min_reads, clade, keep_unclassified, proportions, keep_composition, cores, overwrite):
     """
     Outputs abundance tables with TaxIDs as rows and samples (YYYY_WW) as columns.
     Supports filtering by clade, minimum occupancy, and read depth.
@@ -178,20 +192,20 @@ def table(input_parquet, output, mode, taxonomy, exclude_samples, min_observed, 
         click.secho(f"Error: {str(e)}", fg="red", err=True)
         sys.exit(1)
 
-@main.command(short_help="Extract reads from kraken parquet files into FASTQ.")
+@produce.command(name="reads", short_help="Extract reads from kraken parquet files into FASTQ.")
 @click.argument("input_path", type=click.Path(exists=True, path_type=Path))
 @click.option("--taxonomy", "-t", type=click.Path(exists=True, path_type=Path), required=True, help="JolTax cache directory.")
 @click.option("--tax-id", "-i", required=True, help="Comma-separated TaxIDs to extract.")
 @click.option("--output-dir", "-o", type=click.Path(path_type=Path), default=Path("."), help="Directory to save FASTQ files.")
 @click.option("--mode", "-m", type=click.Choice(["taxon", "clade"]), default="clade", help="Extraction mode (Default: clade).")
-@click.option("--combine-samples", is_flag=True, help="Merge all some samples into one file per TaxID.")
+@click.option("--combine-samples", is_flag=True, help="Merge all samples into one file per TaxID.")
 @click.option("--year-start", type=int, help="Start year for temporal filtering.")
 @click.option("--week-start", type=int, help="Start week for temporal filtering.")
 @click.option("--year-end", type=int, help="End year for temporal filtering.")
 @click.option("--week-end", type=int, help="End week for temporal filtering.")
 @click.option("--cores", type=int, help="Number of CPU cores to use (Default: all available).")
 @click.option("--overwrite", is_flag=True, help="Overwrite output files if they exist.")
-def extract_reads(input_path, taxonomy, tax_id, output_dir, mode, combine_samples, year_start, week_start, year_end, week_end, cores, overwrite):
+def produce_reads(input_path, taxonomy, tax_id, output_dir, mode, combine_samples, year_start, week_start, year_end, week_end, cores, overwrite):
     """
     Extracts reads from Kraken-annotated Parquet files into FASTQ or text format.
     """
@@ -201,7 +215,6 @@ def extract_reads(input_path, taxonomy, tax_id, output_dir, mode, combine_sample
     print_invocation_info()
     print_parameters(ctx.params)
 
-    # Parse tax_id list
     try:
         t_ids = [int(tid.strip()) for tid in tax_id.split(",")]
     except ValueError:
@@ -229,14 +242,14 @@ def extract_reads(input_path, taxonomy, tax_id, output_dir, mode, combine_sample
         click.secho(f"Error: {str(e)}", fg="red", err=True)
         sys.exit(1)
 
-@main.command(short_help="Annotate a raw abundance table with taxonomy and metadata.")
+@main.command(name="annotate", short_help="Annotate a raw abundance table with taxonomy and metadata.")
 @click.argument("input_table", type=click.Path(exists=True, path_type=Path))
 @click.option("--taxonomy", "-t", type=click.Path(exists=True, path_type=Path), required=True, help="JolTax cache directory.")
 @click.option("--output", "-o", type=click.Path(path_type=Path), required=True, help="Path to output file (.csv, .tsv, .parquet).")
 @click.option("--metadata", "-m", type=click.Path(exists=True, path_type=Path), multiple=True, help="Path to external metadata files (can be used multiple times).")
 @click.option("--cores", type=int, help="Number of CPU cores to use (Default: all available).")
 @click.option("--overwrite", is_flag=True, help="Overwrite output file if it exists.")
-def annotate_table(input_table, taxonomy, output, metadata, cores, overwrite):
+def annotate(input_table, taxonomy, output, metadata, cores, overwrite):
     """
     Annotates a numeric <RAW_TABLE> with full taxonomic lineages and sorts
     the rows hierarchically. Also computes summary abundance statistics and
@@ -263,7 +276,7 @@ def annotate_table(input_table, taxonomy, output, metadata, cores, overwrite):
         click.secho(f"Error: {str(e)}", fg="red", err=True)
         sys.exit(1)
 
-@main.command(short_help="Show metadata of a SweetBITS parquet file.")
+@main.command(name="inspect", short_help="Show metadata of a SweetBITS parquet file.")
 @click.argument("parquet_file", type=click.Path(exists=True, path_type=Path))
 def inspect(parquet_file):
     """Prints the global metadata stored in a SweetBITS-generated Parquet file."""
@@ -283,16 +296,16 @@ def inspect(parquet_file):
         click.secho(f"Error reading metadata: {str(e)}", fg="red", err=True)
         sys.exit(1)
 
-@main.command(short_help="Convert Kraken and FASTQ into a KRAKEN_PARQUET.")
+@kraken.command(name="classifications", short_help="Convert Kraken and FASTQ into a KRAKEN_PARQUET.")
 @click.argument("kraken_file", type=click.Path(exists=True, path_type=Path))
 @click.option("--output", "-o", type=click.Path(path_type=Path), required=True, help="Path to output Parquet file.")
 @click.option("--r1", type=click.Path(exists=True, path_type=Path), help="Path to R1 FASTQ file.")
 @click.option("--r2", type=click.Path(exists=True, path_type=Path), help="Path to R2 FASTQ file.")
 @click.option("--cores", type=int, help="Number of CPU cores to use (Default: all available).")
 @click.option("--overwrite", is_flag=True, help="Overwrite output file if it exists.")
-def convert_kraken(kraken_file, output, r1, r2, cores, overwrite):
+def collect_kraken_classifications(kraken_file, output, r1, r2, cores, overwrite):
     """
-    Converts Kraken output and FASTQ files into high-performance KRAKEN_PARQUET files.
+    Converts Kraken read-by-read output and FASTQ files into high-performance KRAKEN_PARQUET files.
     """
     start_time = time.time()
     ctx = click.get_current_context()

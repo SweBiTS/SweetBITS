@@ -127,7 +127,7 @@ Sorted by `year`, `week`, `sample_id`, and `t_id`. Compressed with `zstd`.
 
 ### Data Conversion Tools
 
-#### `convert_kraken`
+#### `collect kraken classifications`
 Converts Kraken output and FASTQ files into high-performance, sorted `<KRAKEN_PARQUET>` files. Uses a two-phase engine: a memory-safe, multi-process streaming ingestion phase, followed by an out-of-core Rust/Polars sort and compression phase.
 - **Inputs:** `<KRAKEN_FILE>` (read-by-read output).
 - **Arguments:**
@@ -138,7 +138,7 @@ Converts Kraken output and FASTQ files into high-performance, sorted `<KRAKEN_PA
   - `--cores INT`: Number of CPU cores to dedicate to the process (Default: all available). Controls Polars thread pool and OS-level decompression pipes. Recommendation: At least 4 cores for optimal streaming.
   - `--overwrite`: Overwrite the output file if it exists.
 
-#### `gather_reports`
+#### `collect kraken reports`
 Merges multiple 8-column Kraken reports into a single Parquet file.
 - **Inputs:** A directory containing report files.
 - **Outputs:** `<REPORT_PARQUET>`
@@ -149,7 +149,7 @@ Merges multiple 8-column Kraken reports into a single Parquet file.
   - `--include GLOB`: Pattern to match report files (Default: `*.report`).
   - `--overwrite`: Overwrite the output file if it exists.
 
-#### `table`
+#### `produce table`
 Outputs abundance tables with `t_id` as the index and samples (YYYY_WW) as columns.
 - **Inputs:** `<REPORT_PARQUET>`
 - **Arguments:**
@@ -158,7 +158,7 @@ Outputs abundance tables with `t_id` as the index and samples (YYYY_WW) as colum
   - `--taxonomy DIR`: JolTax cache directory (Required for `canonical` mode or `--clade` filtering).
   - `--overwrite`: Overwrite the output file if it exists.
 
-#### `extract_reads`
+#### `produce reads`
 Streams `<KRAKEN_PARQUET>` to extract reads into FASTQ format with high throughput and a constant memory profile.
 - **Inputs:** `<KRAKEN_PARQUET>` file or directory.
 - **Arguments:**
@@ -169,7 +169,7 @@ Streams `<KRAKEN_PARQUET>` to extract reads into FASTQ format with high throughp
   - `--combine-samples`: If True, merges all samples into one file per TaxID.
   - `--overwrite`: Overwrite existing files in the output directory.
 
-#### `annotate_table`
+#### `annotate`
 Amends `<RAW_TABLE>` with JolTax lineage metadata and outputs `<ANNOTATED_TABLE>`.
 - **Inputs:** `<RAW_TABLE>` (Parquet, CSV, TSV).
 - **Arguments:**
@@ -236,12 +236,12 @@ All SweetBITS tools that read `<KRAKEN_PARQUET>` or `<REPORT_PARQUET>` files mus
 
 ### Roadmap
 1. [x] Generate test data (Ljungbyhed sample, 100 reads, mock taxonomy).
-2. [x] Implement `gather_reports` to merge Kraken reports.
-3. [x] Implement `table` for abundance matrix generation.
-4. [x] Implement `extract_reads` for FASTQ streaming.
+2. [x] Implement `collect kraken reports` to merge Kraken reports.
+3. [x] Implement `produce table` for abundance matrix generation.
+4. [x] Implement `produce reads` for FASTQ streaming.
 5. [x] Implement `inspect` for metadata viewing.
-6. [x] Implement `annotate_table` for taxonomic annotation and sorting.
+6. [x] Implement `annotate` for taxonomic annotation and sorting.
 7. [x] Implement Parquet version compatibility checking.
-8. [x] Implement `convert_kraken` (Ingestion from raw Kraken/FASTQ).
+8. [x] Implement `collect kraken classifications` (Ingestion from raw Kraken/FASTQ).
 9. [ ] Implement peak memory reporting for Windows (currently Unix-only).
 10. [ ] Future: `coda` command suite for Compositional Data Analysis.

@@ -16,22 +16,41 @@ pip install -e /home/daniel/devel/JolTax
 pip install -e /home/daniel/devel/SweetBITS
 ```
 
+## Command Structure
+
+SweetBITS organizes its tools into a logical workflow centered around bringing data *into* the ecosystem (`collect`) and getting usable artifacts *out* (`produce`).
+
+```text
+sweetbits
+├── collect
+│   └── kraken
+│       ├── reports            <- Gathers multiple kraken .report files
+│       └── classifications    <- Ingests kraken read-by-read output + FASTQ
+│
+├── produce
+│   ├── reads                  <- Extracts reads back to FASTQ
+│   └── table                  <- Generates abundance matrices
+│
+├── annotate                   <- Amends tables with JolTax metadata
+└── inspect                    <- Prints Parquet metadata
+```
+
 ## Commands Overview
 
 SweetBITS provides several high-performance tools for processing Kraken 2 outputs. All tools that generate output files feature strict **overwrite protection**; use the `--overwrite` flag to replace existing files.
 
-- `gather-reports`: Merges multiple Kraken reports into a single, Polars-optimized Parquet file with full provenance metadata. Supports flexible SweBITS sample IDs (e.g., `Ki-2022_20_001`, `Lj_2013_1_142`, `Ki-2022-01-1`).
+- `collect kraken reports`: Merges multiple Kraken reports into a single, Polars-optimized Parquet file with full provenance metadata. Supports flexible SweBITS sample IDs (e.g., `Ki-2022_20_001`, `Lj_2013_1_142`, `Ki-2022-01-1`).
     - *Automatic Detection:* Handles both newer 8-column (with minimizers) and legacy 6-column Kraken reports automatically.
     - *Automatic Data Standard:* Automatically detects and adapts to SweBITS or Generic datasets based on input filenames.
-- `table`: Generates wide-format abundance matrices. Supports three modes:
+- `produce table`: Generates wide-format abundance matrices. Supports three modes:
     - `taxon`: Direct taxonomic assignments.
     - `clade`: Cumulative clade counts (contains redundant counts).
     - `canonical`: **Canonical Remainders**. Essentially taxon mode but where reads between canonical ranks have been pushed up to the nearest canonical ancestor (NCA). Eliminates double-counting while conserving mass balance. Supports "non-canonical rank skipping" (Canonical Rank Read Standardization).
     - *Note:* `--exclude-samples` will issue a warning if an ID in your exclusion file is missing from the dataset.
-- `annotate-table`: Transforms numeric abundance matrices into human-readable files. Automatically injects full taxonomic lineages from JolTax, calculates mean/median signal, and sorts rows hierarchically (Domain/Superkingdom -> Species).
+- `annotate`: Transforms numeric abundance matrices into human-readable files. Automatically injects full taxonomic lineages from JolTax, calculates mean/median signal, and sorts rows hierarchically (Domain/Superkingdom -> Species).
     - *External Metadata:* Seamlessly join any number of external TSV/CSV/Parquet files. The files **must** contain a `t_id` column. All other columns are automatically appended, and column collisions are safely resolved. The final table is ordered: `Taxonomy` -> `Metadata` -> `Summary Stats` -> `Samples`.
-- `convert-kraken`: Ingests massive Kraken and FASTQ files into heavily compressed, memory-mapped `<KRAKEN_PARQUET>` data lakes using an extremely fast, multiprocessed two-pointer streaming engine. If FASTQ files are omitted, it automatically creates a "Skinny Parquet" that drops sequence payloads to save significant disk space while retaining all taxonomic intelligence.
-- `extract-reads`: Efficiently streams reads from Parquet files back into FASTQ.gz format with high throughput and a constant memory profile (OOM-safe). Supports TaxID and temporal filters.
+- `collect kraken classifications`: Ingests massive Kraken and FASTQ files into heavily compressed, memory-mapped `<KRAKEN_PARQUET>` data lakes using an extremely fast, multiprocessed two-pointer streaming engine. If FASTQ files are omitted, it automatically creates a "Skinny Parquet" that drops sequence payloads to save significant disk space while retaining all taxonomic intelligence.
+- `produce reads`: Efficiently streams reads from Parquet files back into FASTQ.gz format with high throughput and a constant memory profile (OOM-safe). Supports TaxID and temporal filters.
 - `inspect`: View provenance metadata, compression settings, and sorting information stored in SweetBITS Parquet files.
 
 ## Shell Autocompletion
