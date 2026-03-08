@@ -166,11 +166,15 @@ def extract_reads_logic(
     total_reads_extracted = 0
     samples_processed = 0
     
-    # We initialize handle_manager as None and set it per-file or per-batch
-    # to handle potential mixed schema if needed, but we'll assume consistency
-    # for the handle manager within a run if possible.
+    # We initialize handle_manager as None and set it per-batch
     handle_manager = None
     
+    # If combining samples, we can pre-initialize all handles to ensure empty files exist
+    if combine_samples:
+        # We don't know has_fastq yet until we read the first file, 
+        # so we'll defer this slightly or assume consistency.
+        pass
+
     try:
         for pfile in parquet_files:
             # FAST-FAIL: Quick filename-based temporal check before scanning Parquet
@@ -180,7 +184,6 @@ def extract_reads_logic(
                     continue
 
             # Validate metadata and columns
-            # We first check common columns, then deduce sequence columns based on metadata
             schema = pl.scan_parquet(pfile).collect_schema()
             metadata = validate_sweetbits_parquet(pfile, expected_type="KRAKEN_PARQUET")
             has_fastq = metadata.get("has_fastq") == "True"
@@ -197,10 +200,32 @@ def extract_reads_logic(
             if missing:
                 raise ValueError(f"File {pfile.name} is missing required columns: {missing}")
 
-            # Initialize or update handle manager if extension changed (mixed batch)
+            # Initialize or update handle manager if extension changed
             if handle_manager is None or handle_manager.extension != ext:
                 if handle_manager: handle_manager.close_all()
                 handle_manager = FastqHandleManager(output_dir, extension=ext)
+                
+                # Pre-initialize combined handles if this is the first file
+                if combine_samples:
+                    for tid in tax_ids:
+                        tmeta = taxon_meta[tid]
+                        fname_base = f"combined_{mode}_{tid}_{tmeta['short_name']}{range_tag}"
+                        if has_fastq:
+                            handle_manager.get_handle(f"{fname_base}_R1")
+                            handle_manager.get_handle(f"{fname_base}_R2")
+                        else:
+                            handle_manager.get_handle(fname_base)
+
+            # Pre-initialize per-sample handles to ensure empty files exist for all requests
+            if not combine_samples:
+                for tid in tax_ids:
+                    tmeta = taxon_meta[tid]
+                    fname_base = f"{info['sample_id']}_{mode}_{tid}_{tmeta['short_name']}"
+                    if has_fastq:
+                        handle_manager.get_handle(f"{fname_base}_R1")
+                        handle_manager.get_handle(f"{fname_base}_R2")
+                    else:
+                        handle_manager.get_handle(fname_base)
 
             # Stream matching records
             lf = pl.scan_parquet(pfile)
