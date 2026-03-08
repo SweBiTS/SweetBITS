@@ -152,8 +152,6 @@ def convert_kraken_logic(
     matched_fastq_count = 0
     last_matched_id = "None"
     
-    # ... rest of setup ...
-    
     # 3. Schema Definition
     # We strictly enforce datatypes at ingestion to minimize disk footprint
     schema_fields = [
@@ -189,7 +187,7 @@ def convert_kraken_logic(
         # (e.g., host depletion), we insert nulls but keep the taxonomic classification.
         click.secho("Phase 1/3: Ingesting data and synchronizing streams...", fg="cyan", err=True)
         try:
-            with click.progressbar(length=None, label="Reading", show_pos=True) as bar:
+            with click.progressbar(length=None, label="Reading", show_pos=True, color="cyan") as bar:
                 while True:
                     chunk_data = {f[0]: [] for f in schema_fields}
                     lines_read = 0
@@ -325,7 +323,7 @@ def convert_kraken_logic(
         new_schema = sorted_pf.schema_arrow.with_metadata(merged_meta)
         
         with pq.ParquetWriter(output_file, new_schema, compression="zstd", compression_level=3) as final_writer:
-            with click.progressbar(length=total_rows, label="Compressing", show_pos=True) as bar:
+            with click.progressbar(length=total_rows, label="Compressing", show_pos=True, color="cyan") as bar:
                 for batch in sorted_pf.iter_batches(batch_size=100_000):
                     final_writer.write_batch(batch)
                     bar.update(batch.num_rows)

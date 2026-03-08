@@ -159,7 +159,7 @@ def gather_reports_logic(
     dfs = []
     # Use StringCache to ensure Categorical consistency during concat
     with pl.StringCache():
-        with click.progressbar(report_files, label="Merging reports", show_pos=True) as bar:
+        with click.progressbar(report_files, label="Merging reports", show_pos=True, color="cyan") as bar:
             for i, file_path in enumerate(bar):
                 info = sample_metadata[i]
                 sample_id = info["sample_id"]
