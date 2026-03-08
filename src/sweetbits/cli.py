@@ -75,8 +75,13 @@ def print_footer(start_time, summary_dict=None):
 CONTEXT_SETTINGS = dict(help_option_names=['-h', '--help'])
 
 @click.group(context_settings=CONTEXT_SETTINGS, invoke_without_command=True)
+@click.option('--version', is_flag=True, help="Show version and splash screen.")
 @click.pass_context
-def main(ctx):
+def main(ctx, version):
+    if version:
+        print_splash()
+        ctx.exit()
+
     # Only show splash if we are at the root level (no subcommand or subcommand is help)
     # Check if we are running root help or root with no command
     is_help = any(arg in sys.argv for arg in ['-h', '--help'])
@@ -178,7 +183,7 @@ def table(input_parquet, output, mode, taxonomy, exclude_samples, min_observed, 
 @click.option("--tax-id", "-i", required=True, help="Comma-separated TaxIDs to extract.")
 @click.option("--output-dir", "-o", type=click.Path(path_type=Path), default=Path("."), help="Directory to save FASTQ files.")
 @click.option("--mode", "-m", type=click.Choice(["taxon", "clade"]), default="clade", help="Extraction mode (Default: clade).")
-@click.option("--combine-samples", is_flag=True, help="Merge all samples into one file per TaxID.")
+@click.option("--combine-samples", is_flag=True, help="Merge all some samples into one file per TaxID.")
 @click.option("--year-start", type=int, help="Start year for temporal filtering.")
 @click.option("--week-start", type=int, help="Start week for temporal filtering.")
 @click.option("--year-end", type=int, help="End year for temporal filtering.")
