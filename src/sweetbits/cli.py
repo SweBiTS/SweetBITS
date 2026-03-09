@@ -32,13 +32,13 @@ def print_splash():
     click.echo(click.style(" GitHub:    ", fg="bright_black") + click.style("https://github.com/SweBITS/SweetBITS", fg="bright_blue"), err=True)
     click.echo(click.style(" Version:   ", fg="bright_black") + click.style(f"v{__version__}", fg="yellow"), err=True)
     click.echo("", err=True)
-    click.echo("-" * 55, err=True)
+    click.echo("-" * 60, err=True)
 
 def print_invocation_info():
     """Prints technical details about the current execution."""
     now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     click.echo(f"{'Start time':20}: {now}", err=True)
-    click.echo(f"{'Toolkit Version':20}: {__version__}", err=True)
+    click.echo(f"{'SweetBITS version':20}: {__version__}", err=True)
     click.echo(f"{'CWD':20}: {os.getcwd()}", err=True)
     click.echo(f"{'Command':20}: sweetbits {' '.join(sys.argv[1:])}", err=True)
     click.echo("-" * 60, err=True)
