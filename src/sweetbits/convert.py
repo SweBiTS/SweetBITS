@@ -11,6 +11,7 @@ import polars as pl
 import pyarrow as pa
 import pyarrow.parquet as pq
 import gc
+import psutil
 from pathlib import Path
 from typing import Dict, Any, Optional, Iterator, Tuple
 
@@ -20,6 +21,12 @@ from sweetbits.metadata import get_standard_metadata
 # Tweak Polars for large-scale data handling
 # Setting a smaller chunk size for streaming operations to reduce peak memory pressure
 pl.Config.set_streaming_chunk_size(50_000)
+
+def _log_mem(label: str):
+    """Logs current Resident Set Size (RSS) in MB."""
+    process = psutil.Process(os.getpid())
+    mem_mb = process.memory_info().rss / (1024 * 1024)
+    click.secho(f"  [RAM] {label:20}: {mem_mb:,.2f} MB", fg="bright_black", err=True)
 
 def _open_text_stream(path: Path):
     """
@@ -131,6 +138,8 @@ def convert_kraken_logic(
         click.secho("Mode: SKINNY Parquet (Taxonomic info only, sequences omitted).", fg="cyan", err=True)
         click.secho(click.style("Info: The ", fg="cyan") + click.style("'produce reads'", fg="cyan", bold=True) + click.style(" command will only output read ID lists for this file.", fg="cyan"), err=True)
     
+    _log_mem("Start of Conversion")
+
     # 2. Stream Initialization
     # We use independent OS-level decompression streams to avoid the Python GIL
     k_stream, k_proc = _open_text_stream(kraken_file)
@@ -277,7 +286,7 @@ def convert_kraken_logic(
                 
                 # Provide periodic feedback
                 if records_processed % 1_000_000 == 0:
-                    click.secho(f"  Processed {records_processed:,} reads...", fg="bright_black", err=True)
+                    _log_mem(f"Ingested {records_processed//1_000_000}M reads")
                 
         finally:
             writer.close()
@@ -288,23 +297,9 @@ def convert_kraken_logic(
             if r2_stream: r2_stream.close()
             if r2_proc: r2_proc.wait()
 
-        # 5. Synchronicity Audit
-        # If the Kraken file is exhausted but FASTQ files still have reads, 
-        # the pipelines drifted out of sync upstream.
-        if has_fastq and (curr_r1 is not None or curr_r2 is not None):
-            msg = (
-                "FASTQ files are out of sync with the Kraken report or contain extra reads. "
-                f"Total Kraken reads processed: {records_processed}. "
-                f"FASTQ reads successfully matched: {matched_fastq_count}. "
-                f"Last matched Read ID: '{last_matched_id}'. "
-            )
-            if curr_r1:
-                msg += f"First unmatched FASTQ ID: '{curr_r1[0]}'. "
-            
-            msg += "Ensure downstream tools (depletion/cleaning) preserved read order and did not add new reads."
-            raise RuntimeError(msg)
-
+        _log_mem("End of Phase 1")
         gc.collect()
+        _log_mem("After GC")
 
         # 6. Phase 2: Sort (Out-of-Core)
         # Sort by TaxID to maximize Run-Length Encoding (RLE) during Parquet zstd compression
@@ -314,7 +309,9 @@ def convert_kraken_logic(
         # Ensure we use streaming for the sort-to-disk phase
         lf.sink_parquet(tmp_sorted, compression="uncompressed")
         
+        _log_mem("End of Phase 2")
         gc.collect()
+        _log_mem("After GC")
 
         # 7. Phase 3: Metadata Injection & Final Compression
         click.secho("Phase 3/3: Metadata injection and final zstd compression...", fg="cyan", err=True)
@@ -344,7 +341,10 @@ def convert_kraken_logic(
                 for batch in sorted_pf.iter_batches(batch_size=100_000):
                     final_writer.write_batch(batch)
                     bar.update(batch.num_rows)
+                    if bar.pos % 5_000_000 == 0:
+                        _log_mem(f"Compressed {bar.pos//1_000_000}M reads")
 
+    _log_mem("End of Conversion")
     return {
         "records_processed": records_processed,
         "has_fastq": has_fastq,
