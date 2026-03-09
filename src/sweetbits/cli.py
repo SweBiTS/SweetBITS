@@ -70,6 +70,7 @@ def print_footer(start_time, summary_dict=None):
 
     click.echo(f"{'Time elapsed':20}: {elapsed:.2f}s", err=True)
     click.echo(f"{'End time':20}: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}", err=True)
+    click.echo("", err=True)
 
 CONTEXT_SETTINGS = dict(help_option_names=['-h', '--help'])
 
