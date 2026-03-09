@@ -86,6 +86,11 @@ def write_parquet_with_metadata(df: 'pl.DataFrame', output_path: Path, metadata:
     if 'version' not in kwargs:
         kwargs['version'] = '1.0'
         
+    # Disable PyArrow's dictionary encoding to prevent Polars reader crashes.
+    # We will cast back to Categorical lazily upon reading.
+    if 'use_dictionary' not in kwargs:
+        kwargs['use_dictionary'] = False
+        
     pq.write_table(table, output_path, **kwargs)
 
 def read_parquet_metadata(file_path: Path) -> Dict[str, str]:
