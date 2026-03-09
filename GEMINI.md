@@ -119,8 +119,6 @@ Sorted by `year`, `week`, `sample_id`, and `t_id`. Compressed with `zstd`.
 | `taxon_reads` | UInt32 | Reads assigned directly to this taxon |
 | `mm_tot` | UInt64 | Total minimizer matches (includes duplicates) |
 | `mm_uniq` | UInt32 | Estimated distinct minimizer matches |
-| `source_file` | Categorical | Path to the original Kraken report file (relative to input) |
-
 
 ---
 
@@ -177,6 +175,7 @@ Amends `<RAW_TABLE>` with JolTax lineage metadata and outputs `<ANNOTATED_TABLE>
   - `--taxonomy DIR`: JolTax cache directory (Required).
   - `--output FILE`: Path to save the annotated table.
   - `--metadata FILE`: (Multiple allowed) Path to external metadata files to join.
+  - `--sort-order [alphabetical, dfs]`: Row sorting order (Default: alphabetical).
   - `--overwrite`: Overwrite the output file if it exists.
 
 #### `to_krona`

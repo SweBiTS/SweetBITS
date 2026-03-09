@@ -27,8 +27,8 @@ def annotate_table_logic(
     Annotates a raw abundance table with taxonomic lineages and external metadata.
 
     Loads a `<RAW_TABLE>`, queries JolTax for full taxonomic lineages (prefixed with 't_'),
-    calculates summary statistics (mean/median), and joins any user-provided metadata files.
-    Finally, sorts the table hierarchically and structures the columns.
+    calculates summary statistics (mean_signal), and joins any user-provided metadata files.
+    Finally, sorts the table hierarchically or via DFS and structures the columns.
 
     Args:
         input_table    : Path to the raw abundance table (Parquet, CSV, TSV).
@@ -122,12 +122,11 @@ def annotate_table_logic(
 
     # We enforce strict=True because the JolTax cache MUST match the Kraken database
     # used to generate the abundance table. Missing TaxIDs indicate a critical config error.
+    click.secho("Annotating taxonomic information...", fg="cyan", err=True)
     tax_df = tree.annotate(base_tids, strict=True)
     
     # Ensure t_id is UInt32 to accommodate large IDs like FILTERED_TID
     tax_df = tax_df.with_columns(pl.col("t_id").cast(pl.UInt32))
-    
-    click.secho(f"Annotated {num_taxa}/{num_taxa} taxa using JolTax taxonomy", fg="cyan", err=True)
 
     # Re-inject special synthetic rows
     special_rows = []

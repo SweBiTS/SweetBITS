@@ -74,14 +74,20 @@ You can join any number of external metadata files (CSV, TSV, or Parquet) to you
 - **Column Order:** The final output is strictly ordered to maximize readability:
   1. `t_id` and all taxonomic ranks (`t_scientific_name`, `t_phylum`, etc.)
   2. All external metadata columns (in the order the files were provided)
-  3. `median_signal` and `mean_signal` (dynamically calculated)
+  3. `mean_signal` (dynamically calculated)
   4. The raw sample abundance matrix
 
 ```bash
-# Basic taxonomy annotation and hierarchical sorting
+# Basic taxonomy annotation and hierarchical sorting (alphabetical)
 sweetbits annotate canonical_table.tsv \
     --taxonomy /path/to/joltax_cache \
     --output annotated_canonical.tsv
+
+# Abundance-weighted DFS sorting (related organisms cluster together, most abundant first)
+sweetbits annotate taxon_table.csv \
+    --taxonomy /path/to/joltax_cache \
+    --sort-order dfs \
+    --output annotated_dfs.csv
 
 # Join multiple external metadata files (e.g., GBIF flags, Kraken stats)
 sweetbits annotate abundance_table.parquet \

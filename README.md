@@ -47,7 +47,9 @@ SweetBITS provides several high-performance tools for processing Kraken 2 output
     - `clade`: Cumulative clade counts (contains redundant counts).
     - `canonical`: **Canonical Remainders**. Essentially taxon mode but where reads between canonical ranks have been pushed up to the nearest canonical ancestor (NCA). Eliminates double-counting while conserving mass balance. Supports "non-canonical rank skipping" (Canonical Rank Read Standardization).
     - *Note:* `--exclude-samples` will issue a warning if an ID in your exclusion file is missing from the dataset.
-- `annotate`: Transforms numeric abundance matrices into human-readable files. Automatically injects full taxonomic lineages from JolTax, calculates mean/median signal, and sorts rows hierarchically (Domain/Superkingdom -> Species).
+- `annotate`: Transforms numeric abundance matrices into human-readable files. Automatically injects full taxonomic lineages from JolTax, calculates mean_signal, and supports two sorting modes:
+    - `alphabetical`: Hierarchical rank-based sort (Domain -> Phylum -> ...).
+    - `dfs`: Abundance-weighted Depth-First Search traversal (related organisms cluster together, most abundant branches first).
     - *External Metadata:* Seamlessly join any number of external TSV/CSV/Parquet files. The files **must** contain a `t_id` column. All other columns are automatically appended, and column collisions are safely resolved. The final table is ordered: `Taxonomy` -> `Metadata` -> `Summary Stats` -> `Samples`.
 - `collect kraken classifications`: Ingests massive Kraken and FASTQ files into heavily compressed, memory-mapped `<KRAKEN_PARQUET>` data lakes using an extremely fast, multiprocessed two-pointer streaming engine. If FASTQ files are omitted, it automatically creates a "Skinny Parquet" that drops sequence payloads to save significant disk space while retaining all taxonomic intelligence.
 - `produce reads`: Efficiently streams reads from Parquet files back into FASTQ.gz format with high throughput and a constant memory profile (OOM-safe). Supports TaxID and temporal filters.
