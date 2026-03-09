@@ -160,17 +160,17 @@ def gather_reports_logic(
     is_swebits = all(m["data_standard"] == "SWEBITS" for m in sample_metadata)
     data_standard = "SWEBITS" if is_swebits else "GENERIC"
 
-    click.secho(f"Found {len(report_files)} reports. Collecting...", fg="cyan", err=True)
+    click.secho(f"Found {len(report_files)} reports to merge.", fg="cyan", err=True)
 
     # 3. Process and Stack Files
     dfs = []
     
-    # Colour of progress bar
     fill_char = click.style('#', fg='yellow')
-
+    label = click.style("Collecting...", fg="cyan")
+    
     # Use StringCache to ensure Categorical consistency during concat
     with pl.StringCache():
-        with click.progressbar(report_files, show_pos=True, color="cyan", fill_char=fill_char) as bar:
+        with click.progressbar(report_files, label=label, show_pos=True, color="cyan", fill_char=fill_char) as bar:
             for i, file_path in enumerate(bar):
                 info = sample_metadata[i]
                 sample_id = info["sample_id"]
@@ -214,9 +214,9 @@ def gather_reports_logic(
         compression="zstd", 
         compression_level=3
     )
-
-    click.secho(f"Done!", fg="cyan", err=True)
     
+    click.secho(f"Done!", fg="cyan", err=True)
+
     return {
         "report_format": report_format,
         "data_standard": data_standard,
