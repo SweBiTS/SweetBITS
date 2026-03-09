@@ -76,7 +76,9 @@ def generate_table_logic(
         FileNotFoundError : If the input file does not exist.
         FileExistsError   : If output_file exists and overwrite is False.
     """
-    if output_file.exists() and not overwrite:
+    click.secho("Initiating table generation...", fg="cyan", err=True)
+
+    if not overwrite and output_file.exists():
         raise FileExistsError(f"Output file '{output_file}' already exists. Use --overwrite to replace it.")
 
     if cores:
@@ -87,16 +89,17 @@ def generate_table_logic(
     required_cols = ["sample_id", "t_id", "clade_reads", "taxon_reads"]
     metadata = validate_sweetbits_file(input_parquet, expected_type="REPORT_PARQUET", required_columns=required_cols)
     data_standard = metadata.get("data_standard", "GENERIC")
-    
+
     # Lazy scan - Polars natively handles the Categorical sample_id column written by collect
     lf = pl.scan_parquet(input_parquet)
-    
+
     # 2. Sample Filtering and Validation
     # Execute ONE quick scan of just the sample IDs to power validation and math
     existing_samples_df = lf.select("sample_id").unique().collect()
     all_ids = set(existing_samples_df["sample_id"].to_list())
-    
+
     if exclude_samples:
+        click.secho("Applying sample exclusions...", fg="cyan", err=True)
         excluded_ids = load_sample_id_list(exclude_samples)
         phantom_ids = [eid for eid in excluded_ids if eid not in all_ids]
         
@@ -124,6 +127,7 @@ def generate_table_logic(
     # filters drop rows from the lazyframe.
     true_totals = {}
     if keep_composition:
+        click.secho("Calculating baseline totals for keep-composition logic...", fg="cyan", err=True)
         if mode == "clade":
             raise ValueError("--keep-composition is not mathematically valid for 'clade' mode due to read double-counting. Please use 'taxon' or 'canonical' mode.")
             
@@ -143,20 +147,24 @@ def generate_table_logic(
     # Load the taxonomy tree if required for the specified mode or clade filter.
     tree = None
     if mode == "canonical" or clade_filter is not None:
+        click.secho("Loading JolTax taxonomy tree...", fg="cyan", err=True)
         if not taxonomy_dir:
             raise ValueError(f"Taxonomy directory is required for mode '{mode}' or clade filtering.")
         tree = JolTree.load(str(taxonomy_dir))
         
     if clade_filter is not None:
+        click.secho(f"Applying clade filter for TaxID {clade_filter}...", fg="cyan", err=True)
         clade_taxids = tree.get_clade(clade_filter)
         lf = lf.filter(pl.col("t_id").is_in(clade_taxids))
         
     if not keep_unclassified and mode != "canonical":
+        click.secho("Filtering out unclassified reads...", fg="cyan", err=True)
         lf = lf.filter(pl.col("t_id") != 0)
         
     # 5. Metric Aggregation
     # Collect the necessary columns and perform the required mathematical transformations
     # based on the requested abundance mode.
+    click.secho(f"Aggregating metrics for '{mode}' mode...", fg="cyan", err=True)
     target_cols = ["t_id", "sample_id"]
     if data_standard == "SWEBITS":
         target_cols.extend(["year", "week"])
@@ -170,6 +178,7 @@ def generate_table_logic(
         pivot_df = lf.select(target_cols).collect()
         pivot_col = "clade_reads"
     elif mode == "canonical":
+        click.secho("Calculating canonical remainders (this may take a moment)...", fg="cyan", err=True)
         # NCA math always requires clade_reads, audit needs taxon_reads
         input_cols = ["t_id", "sample_id", "clade_reads", "taxon_reads"]
         input_df = lf.select(input_cols).collect()
@@ -192,6 +201,7 @@ def generate_table_logic(
     # Transform the long-format data into a wide-format matrix. 
     # For SWEBITS data, group by YYYY_WW to enforce the strict project 
     # constraint of one unique sample per week per site.
+    click.secho("Pivoting data to wide format matrix...", fg="cyan", err=True)
     if data_standard == "SWEBITS":
         pivot_df = pivot_df.with_columns(
             (pl.col("year").cast(pl.String) + "_" + pl.col("week").cast(pl.String).str.pad_start(2, "0")).alias("period")
@@ -212,12 +222,14 @@ def generate_table_logic(
     sample_cols = [c for c in table.columns if c != "t_id"]
     if sample_cols:
         if min_observed > 0:
+            click.secho(f"Applying minimum required observations filter (min_observed >= {min_observed})...", fg="cyan", err=True)
             # Idiomatic Polars: evaluate directly inside the filter context
             table = table.filter(
                 pl.sum_horizontal([(pl.col(c) > 0) for c in sample_cols]) >= min_observed
             )
             
         if min_reads > 0:
+            click.secho(f"Applying minimum read depth filter (min_reads >= {min_reads})...", fg="cyan", err=True)
             table = table.filter(
                 pl.max_horizontal(sample_cols) >= min_reads
             )
@@ -227,6 +239,7 @@ def generate_table_logic(
     # against the pre-calculated baseline totals. Any missing reads are bundled
     # into a synthetic "Filtered classified" bin to preserve the global sample size.
     if keep_composition and sample_cols:
+        click.secho("Applying keep-composition logic to preserve mass balance...", fg="cyan", err=True)
         filtered_row = {"t_id": FILTERED_TID}
         has_filtered = False
         for c in sample_cols:
@@ -245,6 +258,7 @@ def generate_table_logic(
     # 9. Proportion Calculation
     # Convert raw counts to relative proportions if requested.
     if proportions and sample_cols:
+        click.secho("Converting counts to relative proportions...", fg="cyan", err=True)
         if mode in ["taxon", "canonical"]:
             # Mutually exclusive modes naturally sum to 1.0
             exprs = [(pl.col(c) / pl.col(c).sum()).alias(c) for c in sample_cols]
@@ -264,6 +278,7 @@ def generate_table_logic(
             table = table.with_columns(exprs)
         
     # 10. Output Generation
+    click.secho(f"Saving output to {output_file.name}...", fg="cyan", err=True)
     ext = output_file.suffix.lower()
     meta = get_standard_metadata("RAW_TABLE", source_path=input_parquet, sorting="t_id", data_standard=data_standard)
     
@@ -277,6 +292,8 @@ def generate_table_logic(
         raise ValueError(f"Unsupported output format: {ext}")
         
     save_companion_metadata(output_file, meta)
+    
+    click.secho("Done!", fg="green", bold=True, err=True)
         
     return {
         "data_standard": data_standard,

@@ -345,6 +345,9 @@ def convert_kraken_logic(
         save_companion_metadata(output_file, meta)
 
     _log_mem("End of Conversion")
+    
+    click.secho("Done!", fg="green", bold=True, err=True)
+    
     return {
         "records_processed": records_processed,
         "has_fastq": has_fastq,

@@ -139,6 +139,8 @@ def extract_reads_logic(
         FileExistsError : If output directory already exists and overwrite is False.
     """
     # 1. Setup
+    click.secho("Initiating read extraction...", fg="cyan", err=True)
+
     if cores:
         os.environ["POLARS_MAX_THREADS"] = str(cores)
 
@@ -152,6 +154,7 @@ def extract_reads_logic(
                 "Use --overwrite to replace existing data."
             )
 
+    click.secho("Loading JolTax taxonomy tree...", fg="cyan", err=True)
     tree = JolTree.load(str(taxonomy_dir))
     output_dir.mkdir(parents=True, exist_ok=True)
     
@@ -187,6 +190,8 @@ def extract_reads_logic(
     total_reads_extracted = 0
     samples_processed = 0
     handle_manager = None
+    
+    click.secho(f"Found {len(parquet_files)} parquet files. Scanning for target TaxIDs...", fg="cyan", err=True)
     
     try:
         for pfile in parquet_files:
@@ -327,8 +332,10 @@ def extract_reads_logic(
         if handle_manager:
             handle_manager.close_all()
 
+    click.secho("Done!", fg="green", bold=True, err=True)
+
     return {
         "samples_processed": samples_processed,
-        "records_extracted": total_reads_extracted,
+        "total_reads": total_reads_extracted,
         "output_dir": str(output_dir)
     }

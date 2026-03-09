@@ -210,7 +210,7 @@ def gather_reports_logic(
     merged_df.write_parquet(output_file, compression="zstd", compression_level=3)
     save_companion_metadata(output_file, metadata)
     
-    click.secho(f"Done!", fg="cyan", err=True)
+    click.secho("Done!", fg="green", bold=True, err=True)
 
     return {
         "report_format": report_format,

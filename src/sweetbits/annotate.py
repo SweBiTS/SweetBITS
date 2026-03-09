@@ -46,6 +46,8 @@ def annotate_table_logic(
         ValueError      : If a metadata file lacks a 't_id' column or if an unsupported format is used.
         FileExistsError : If output_file exists and overwrite is False.
     """
+    click.secho("Initiating table annotation...", fg="cyan", err=True)
+
     if output_file.exists() and not overwrite:
         raise FileExistsError(f"Output file '{output_file}' already exists. Use --overwrite to replace it.")
 
@@ -106,6 +108,7 @@ def annotate_table_logic(
     num_taxa = len(base_tids)
 
     # 2. JolTax Annotation
+    click.secho("Loading JolTax taxonomy tree...", fg="cyan", err=True)
     tree = JolTree.load(str(taxonomy_dir))
     
     # We enforce strict=True because the JolTax cache MUST match the Kraken database
@@ -184,6 +187,7 @@ def annotate_table_logic(
         metadata_cols.extend(new_m_cols)
 
     # 4. Summary Statistics
+    click.secho("Calculating summary statistics...", fg="cyan", err=True)
     if sample_cols:
         df = df.with_columns([
             pl.concat_list(sample_cols).list.median().alias("median_signal"),
@@ -196,6 +200,7 @@ def annotate_table_logic(
         ])
 
     # 5. Sorting (Hierarchical Taxonomy -> t_id)
+    click.secho("Applying hierarchical taxonomic sort...", fg="cyan", err=True)
     sort_cols_target = [
         "t_domain", "t_superkingdom", "t_phylum", "t_class", "t_order", 
         "t_family", "t_genus", "t_species", "t_id"
@@ -213,6 +218,7 @@ def annotate_table_logic(
     df = df.select(ordered_cols)
 
     # 7. Output Generation
+    click.secho(f"Saving annotated table to {output_file.name}...", fg="cyan", err=True)
     out_ext = output_file.suffix.lower()
     meta = get_standard_metadata(
         "ANNOTATED_TABLE", 
@@ -229,6 +235,8 @@ def annotate_table_logic(
         df.write_csv(output_file)
 
     save_companion_metadata(output_file, meta)
+
+    click.secho("Done!", fg="green", bold=True, err=True)
 
     return {
         "taxa_processed": num_taxa,
