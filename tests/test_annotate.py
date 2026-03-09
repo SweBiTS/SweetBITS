@@ -67,13 +67,11 @@ def test_annotate_table_basic(tmp_path, mock_taxonomy, base_table):
     
     # Check stats columns
     assert "mean_signal" in df.columns
-    assert "median_signal" in df.columns
-    
-    # Check math for 9606 (sample_1=10, sample_2=100) -> mean=55, median=55
+    assert "median_signal" not in df.columns
+
+    # Check math for 9606 (sample_1=10, sample_2=100) -> mean=55
     row = df.filter(pl.col("t_id") == 9606)
-    assert row["mean_signal"][0] == 55.0
-    assert row["median_signal"][0] == 55.0
-    
+    assert row["mean_signal"][0] == 55.0    
     # Check ordering (t_id first)
     assert df.columns[0] == "t_id"
 
