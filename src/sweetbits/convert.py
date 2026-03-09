@@ -121,10 +121,10 @@ def convert_kraken_logic(
     # Log the conversion mode
     if has_fastq:
         click.secho("Mode: FAT Parquet (FASTQ sequences and quality scores included).", fg="cyan", err=True)
-        click.secho("Info: You can extract reads directly from this Parquet file using 'produce reads'.", fg="cyan", err=True)
+        click.secho(click.style("Info: You can extract reads directly from this Parquet file using ", fg="cyan") + click.style("'produce reads'", fg="cyan", bold=True) + click.style(".", fg="cyan"), err=True)
     else:
         click.secho("Mode: SKINNY Parquet (Taxonomic info only, sequences omitted).", fg="cyan", err=True)
-        click.secho("Info: The 'produce reads' command will only output read ID lists for this file.", fg="cyan", err=True)
+        click.secho(click.style("Info: The ", fg="cyan") + click.style("'produce reads'", fg="cyan", bold=True) + click.style(" command will only output read ID lists for this file.", fg="cyan"), err=True)
     
     # 2. Stream Initialization
     # We use independent OS-level decompression streams to avoid the Python GIL
@@ -178,6 +178,9 @@ def convert_kraken_logic(
         
     schema = pa.schema(schema_fields)
 
+    # UI styling
+    fill_char = click.style('#', fg='yellow')
+    
     with tempfile.TemporaryDirectory() as tmpdir:
         tmp_unsorted = Path(tmpdir) / "unsorted.parquet"
         writer = pq.ParquetWriter(tmp_unsorted, schema, compression='NONE')
@@ -324,8 +327,9 @@ def convert_kraken_logic(
             
         new_schema = sorted_pf.schema_arrow.with_metadata(merged_meta)
         
+        label = click.style("Compressing", fg="cyan")
         with pq.ParquetWriter(output_file, new_schema, compression="zstd", compression_level=3) as final_writer:
-            with click.progressbar(length=total_rows, label="Compressing", show_pos=True, color="cyan", fill_char=fill_char) as bar:
+            with click.progressbar(length=total_rows, label=label, show_pos=True, color="cyan", fill_char=fill_char) as bar:
                 for batch in sorted_pf.iter_batches(batch_size=100_000):
                     final_writer.write_batch(batch)
                     bar.update(batch.num_rows)

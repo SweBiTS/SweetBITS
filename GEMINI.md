@@ -57,7 +57,7 @@ SweetBITS supports two different input report formats and tracks them in the Par
 - **Metadata:** `report_format: LEGACY`
 - **Features:** Standard Kraken 2 report columns only. Minimizer columns are omitted from the resulting Parquet file to save space and maintain schema integrity.
 
-*Note:* `gather_reports` will raise an error if a batch of reports contains mixed formats.
+*Note:* `collect kraken reports` will raise an error if a batch of reports contains mixed formats.
 
 ---
 
