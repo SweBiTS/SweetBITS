@@ -127,7 +127,7 @@ def annotate_table_logic(
     # Ensure t_id is UInt32 to accommodate large IDs like FILTERED_TID
     tax_df = tax_df.with_columns(pl.col("t_id").cast(pl.UInt32))
     
-    click.secho(f"Annotated {num_taxa}/{num_taxa} taxa using JolTax taxonomy", fg="green", err=True)
+    click.secho(f"Annotated {num_taxa}/{num_taxa} taxa using JolTax taxonomy", fg="cyan", err=True)
 
     # Re-inject special synthetic rows
     special_rows = []
@@ -218,21 +218,36 @@ def annotate_table_logic(
         click.secho("Applying abundance-weighted DFS sorting...", fg="cyan", err=True)
         import numpy as np
 
-        # 5.1 Calculate Clade Weights
-        # Map TaxIDs to their mean signals
+        # 5.1 Identify Active Clades
+        # Instead of processing all 3M+ nodes, we only look at TaxIDs in the table
+        # and their direct ancestors. This makes the DFS instantaneous.
         table_tid_means = dict(zip(df["t_id"].to_list(), df["mean_signal"].to_list()))
 
+        table_tids = np.array([tid for tid in table_tid_means.keys() if tid not in [UNCLASSIFIED_TID, FILTERED_TID]], dtype=np.uint32)
+        table_indices = tree._get_indices(table_tids)
+        valid_table_indices = table_indices[table_indices != -1]
+
+        # Build set of all indices that form the "active" subtree
+        active_indices_set = set()
+        for idx in valid_table_indices:
+            # Note: JolTree.get_lineage returns list of t_ids
+            lineage = tree.get_lineage(int(tree._index_to_id[idx]))
+            active_indices_set.update(tree._get_indices(np.array(lineage, dtype=np.uint32)))
+        
+        # Include self in the active set (get_lineage excludes self by default)
+        active_indices_set.update(valid_table_indices)
+
+        active_indices = sorted(list(active_indices_set))
         num_nodes = len(tree.parents)
         clade_weights = np.zeros(num_nodes, dtype=np.float64)
 
-        table_indices = tree._get_indices(np.array(list(table_tid_means.keys())))
-        for i, idx in enumerate(table_indices):
-            if idx != -1:
-                clade_weights[idx] = table_tid_means[list(table_tid_means.keys())[i]]
+        for idx in valid_table_indices:
+            clade_weights[idx] = table_tid_means[int(tree._index_to_id[idx])]
 
-        # Propagate weights up the tree
-        indices_by_depth = np.argsort(tree.depths)[::-1]
-        for idx in indices_by_depth:
+        # Propagate weights up the tree (only through active indices)
+        # Sort active indices by depth descending for safe upward propagation
+        active_by_depth = sorted(active_indices, key=lambda x: tree.depths[x], reverse=True)
+        for idx in active_by_depth:
             p_idx = tree.parents[idx]
             if p_idx != idx and p_idx != -1:
                 if mode == "clade":
@@ -240,16 +255,17 @@ def annotate_table_logic(
                 else:
                     clade_weights[p_idx] += clade_weights[idx]
 
-        # 5.2 Build Children List
-        children = [[] for _ in range(num_nodes)]
-        for idx, p_idx in enumerate(tree.parents):
-            if idx != p_idx and p_idx != -1:
+        # 5.2 Build Sparse Children List
+        children = {idx: [] for idx in active_indices}
+        for idx in active_indices:
+            p_idx = tree.parents[idx]
+            if p_idx != idx and p_idx != -1 and p_idx in children:
                 children[p_idx].append(idx)
 
         # 5.3 Sort siblings by clade weight (descending)
-        for i in range(num_nodes):
-            if children[i]:
-                children[i].sort(key=lambda x: clade_weights[x], reverse=True)
+        for idx in children:
+            if children[idx]:
+                children[idx].sort(key=lambda x: clade_weights[x], reverse=True)
 
         # 5.4 Execute DFS Traversal
         dfs_order = []
@@ -272,8 +288,9 @@ def annotate_table_logic(
                 visited_tids.add(tid)
 
             # Reverse order for stack to process heaviest first
-            for c_idx in reversed(children[idx]):
-                stack.append(c_idx)
+            if idx in children:
+                for c_idx in reversed(children[idx]):
+                    stack.append(c_idx)
 
         # Create a mapping for Polars sort
         order_df = pl.DataFrame({
