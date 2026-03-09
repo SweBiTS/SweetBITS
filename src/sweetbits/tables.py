@@ -281,6 +281,7 @@ def generate_table_logic(
     click.secho(f"Saving output to {output_file.name}...", fg="cyan", err=True)
     ext = output_file.suffix.lower()
     meta = get_standard_metadata("RAW_TABLE", source_path=input_parquet, sorting="t_id", data_standard=data_standard)
+    meta["mode"] = mode
     
     if ext == ".parquet":
         table.write_parquet(output_file)

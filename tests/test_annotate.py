@@ -106,6 +106,58 @@ def test_annotate_table_with_metadata(tmp_path, mock_taxonomy, base_table, metad
     assert row_2["status"][0] is None
     assert row_2["status_colliding_meta"][0] == "Bacteria"
 
+def test_annotate_table_dfs_sorting(tmp_path, mock_taxonomy, base_table):
+    out_path = tmp_path / "out_dfs.csv"
+    
+    # In base_table:
+    # 2 (Bacteria): 165 mean
+    # 10090 (Mouse): 110 mean
+    # 9606 (Human): 55 mean
+    
+    annotate_table_logic(
+        input_table=base_table,
+        taxonomy_dir=mock_taxonomy,
+        output_file=out_path,
+        sort_order="dfs"
+    )
+    
+    df = pl.read_csv(out_path)
+    
+    # 2 should be at the top if it's the heaviest branch
+    assert df.height == 3
+    assert "mean_signal" in df.columns
+    
+    # Verify we can at least run it
+    tids = df["t_id"].to_list()
+    assert 2 in tids
+    assert 9606 in tids
+    assert 10090 in tids
+
+def test_annotate_table_dfs_sorting_weights(tmp_path, mock_taxonomy):
+    # Setup a table where Eukaryota (9606, 10090) is heavier than Bacteria (2)
+    df = pl.DataFrame({
+        "t_id": [2, 9606, 10090],
+        "sample_1": [10, 1000, 1], # Bacteria=10, Human=1000, Mouse=1
+    })
+    path = tmp_path / "weighted.parquet"
+    meta = get_standard_metadata("RAW_TABLE")
+    df.write_parquet(path)
+    save_companion_metadata(path, meta)
+    
+    out_path = tmp_path / "out_dfs_weighted.csv"
+    annotate_table_logic(
+        input_table=path,
+        taxonomy_dir=mock_taxonomy,
+        output_file=out_path,
+        sort_order="dfs"
+    )
+    
+    df_res = pl.read_csv(out_path)
+    tids = df_res["t_id"].to_list()
+    # Eukaryota branch (9606, 10090) should come before Bacteria (2)
+    # Human (9606) is much heavier than Mouse (1) so it comes first in its branch
+    assert tids == [9606, 10090, 2]
+
 def test_missing_tid_column(tmp_path, mock_taxonomy, base_table):
     bad_meta = tmp_path / "bad.csv"
     pl.DataFrame({"id": [1, 2], "val": ["A", "B"]}).write_csv(bad_meta)

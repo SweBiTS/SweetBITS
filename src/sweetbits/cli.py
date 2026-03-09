@@ -249,12 +249,13 @@ def produce_reads(input_path, taxonomy, tax_id, output_dir, mode, combine_sample
 @click.option("--taxonomy", "-t", type=click.Path(exists=True, path_type=Path), required=True, help="JolTax cache directory.")
 @click.option("--output", "-o", type=click.Path(path_type=Path), required=True, help="Path to output file (.csv, .tsv, .parquet).")
 @click.option("--metadata", "-m", type=click.Path(exists=True, path_type=Path), multiple=True, help="Path to external metadata files (can be used multiple times).")
+@click.option("--sort-order", default="alphabetical", type=click.Choice(["alphabetical", "dfs"]), help="Row sorting order (alphabetical or abundance-weighted DFS).")
 @click.option("--cores", type=int, help="Number of CPU cores to use (Default: all available).")
 @click.option("--overwrite", is_flag=True, help="Overwrite output file if it exists.")
-def annotate(input_table, taxonomy, output, metadata, cores, overwrite):
+def annotate(input_table, taxonomy, output, metadata, sort_order, cores, overwrite):
     """
     Annotates a numeric <RAW_TABLE> with full taxonomic lineages and sorts
-    the rows hierarchically. Also computes summary abundance statistics and
+    the rows. Also computes summary abundance statistics and
     allows joining arbitrary external metadata files.
     """
     start_time = time.time()
@@ -269,6 +270,7 @@ def annotate(input_table, taxonomy, output, metadata, cores, overwrite):
             taxonomy_dir=taxonomy,
             output_file=output,
             metadata_files=list(metadata) if metadata else [],
+            sort_order=sort_order,
             cores=cores,
             overwrite=overwrite
         )
