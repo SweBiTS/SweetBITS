@@ -137,7 +137,7 @@ def gather_reports_logic(
         import os
         os.environ["POLARS_MAX_THREADS"] = str(cores)
 
-    click.secho(f"Looking for report files in {input_dir}...", fg="cyan", err=True)
+    click.secho(f"Locating Kraken 2 report files...", fg="cyan", err=True)
     search_path = "**/" + include_pattern if recursive else include_pattern
     report_files = sorted(list(input_dir.glob(search_path)))
     
@@ -160,14 +160,14 @@ def gather_reports_logic(
     is_swebits = all(m["data_standard"] == "SWEBITS" for m in sample_metadata)
     data_standard = "SWEBITS" if is_swebits else "GENERIC"
 
-    click.secho(f"Found {len(report_files)} Kraken reports. Collecting...", fg="cyan", err=True)
+    click.secho(f"Found {len(report_files)} reports. Collecting...", fg="cyan", err=True)
 
     # 3. Process and Stack Files
     dfs = []
     
+    # Colour of progress bar
     fill_char = click.style('#', fg='yellow')
-    label = click.style("Merging reports", fg="cyan")
-    
+
     # Use StringCache to ensure Categorical consistency during concat
     with pl.StringCache():
         with click.progressbar(report_files, label=label, show_pos=True, color="cyan", fill_char=fill_char) as bar:
@@ -214,6 +214,8 @@ def gather_reports_logic(
         compression="zstd", 
         compression_level=3
     )
+
+    click.secho(f"Done!", fg="cyan", err=True)
     
     return {
         "report_format": report_format,
