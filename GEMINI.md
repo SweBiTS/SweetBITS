@@ -115,7 +115,6 @@ Sorted by `year`, `week`, `sample_id`, and `t_id`. Compressed with `zstd`.
 | `year` | UInt16 | The ISO year of the sample |
 | `week` | UInt8 | The ISO week of the sample |
 | `t_id` | UInt32 | The classified TaxID |
-| `clade_reads` | UInt32 | Reads assigned to the clade rooted at this taxon |
 | `taxon_reads` | UInt32 | Reads assigned directly to this taxon |
 | `mm_tot` | UInt64 | Total minimizer matches (includes duplicates) |
 | `mm_uniq` | UInt32 | Estimated distinct minimizer matches |
@@ -149,14 +148,14 @@ Merges multiple 8-column Kraken reports into a single Parquet file.
   - `--overwrite`: Overwrite the output file if it exists.
 
 #### `produce table`
-Outputs abundance tables with `t_id` as the index and samples (YYYY_WW) as columns.
+Outputs abundance tables with `t_id` as the index and samples (YYYY_WW) as columns. Uses the `calc_clade_sum` algorithm for dynamic recursive filtering and clade calculation.
 - **Inputs:** `<REPORT_PARQUET>`
 - **Arguments:**
   - `--mode`: `[taxon, clade, canonical]` (Default: `clade`)
   - `--output FILE`: Path to the output file (Supported: `.csv`, `.tsv`, `.parquet`). Format inferred from suffix.
-  - `--taxonomy DIR`: JolTax cache directory (Required for `canonical` mode or `--clade` filtering).
+  - `--taxonomy DIR`: JolTax cache directory (Required for ALL modes).
   - `--overwrite`: Overwrite the output file if it exists.
-  - `--dry-run`: If True, prints a comprehensive audit report of data retention and exits without saving.
+  - `--dry-run`: If True, prints a comprehensive audit report of data retention (including Read Retention by Rank) and exits without saving.
 
 #### `produce reads`
 Streams `<KRAKEN_PARQUET>` to extract reads into FASTQ format with high throughput and a constant memory profile.

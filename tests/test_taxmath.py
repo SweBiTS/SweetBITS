@@ -2,7 +2,7 @@ import pytest
 import polars as pl
 import numpy as np
 from pathlib import Path
-from sweetbits.math import calc_clade_sum
+from sweetbits.taxmath import calc_clade_sum
 from joltax import JolTree
 
 def test_calc_clade_sum_basic(tmp_path):

@@ -21,11 +21,13 @@ sweetbits collect kraken reports /path/to/data --output results.parquet --recurs
 
 ## 2. Generating Abundance Tables (`produce table`)
 
-Create a wide-format matrix from merged reports.
+Create a wide-format matrix from merged reports. All modes now require the JolTax taxonomy for dynamic clade calculation and recursive filtering.
 
 ```bash
 # Default (Clade mode, SWEBITS period grouping)
-sweetbits produce table merged_reports.parquet --output abundance_table.tsv
+sweetbits produce table merged_reports.parquet \
+    --taxonomy /path/to/joltax_cache \
+    --output abundance_table.tsv
 
 # Dry-run: Preview filtering retention statistics without saving
 sweetbits produce table merged_reports.parquet \
@@ -39,9 +41,10 @@ sweetbits produce table merged_reports.parquet \
 sweetbits produce table merged_reports.parquet \
     --output taxon_table.csv \
     --mode taxon \
+    --taxonomy /path/to/joltax_cache \
     --min-observed 50 \
     --min-reads 100
-
+```
 # Canonical Remainders (Requires JolTax)
 sweetbits produce table merged_reports.parquet \
     --output canonical_table.tsv \

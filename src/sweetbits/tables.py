@@ -13,7 +13,7 @@ from joltax import JolTree
 from joltax.constants import CANONICAL_RANKS
 from sweetbits.utils import parse_sample_id, load_sample_id_list, FILTERED_TID, UNCLASSIFIED_TID
 from sweetbits.metadata import get_standard_metadata, save_companion_metadata, read_companion_metadata, validate_sweetbits_file
-from sweetbits.math import calc_clade_sum
+from sweetbits.taxmath import calc_clade_sum
 from sweetbits.canonical import calculate_canonical_remainders
 
 logger = logging.getLogger(__name__)
@@ -121,7 +121,7 @@ def _print_audit_report(
     ret_pct = (final_taxa_count / baseline_taxa_count * 100) if baseline_taxa_count > 0 else 0
     click.secho(f"{'Total Taxa':<16} {baseline_taxa_count:<18} {final_taxa_count:<18} {ret_pct:.1f}%\n", bold=True, err=True)
 
-    if base_clade_reads and retained_clade_reads:
+    if base_clade_reads is not None and retained_clade_reads is not None:
         click.secho("[ 4 ] Read Retention by Rank", fg="cyan", bold=True, err=True)
         click.secho("-" * 80, fg="bright_black", err=True)
         click.secho(f"{'Rank':<16} {'Original Reads':<18} {'Retained Reads':<18} {'Retention %':<12}", bold=True, err=True)

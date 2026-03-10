@@ -1,5 +1,6 @@
 from pathlib import Path
 from sweetbits.testing import generate_mock_kraken_parquet, generate_mock_report_parquet, generate_mock_taxonomy
+from joltax import JolTree
 
 def main():
     test_data_dir = Path("test_data")
@@ -9,6 +10,12 @@ def main():
     taxonomy_dir = test_data_dir / "taxonomy"
     print(f"Generating mock taxonomy in {taxonomy_dir}...")
     generate_mock_taxonomy(taxonomy_dir)
+    
+    # Build JolTax cache
+    joltax_cache = test_data_dir / "joltax_cache"
+    print(f"Building JolTax cache in {joltax_cache}...")
+    tree = JolTree(tax_dir=str(taxonomy_dir))
+    tree.save(str(joltax_cache))
     
     sample_id = "Lj-2022_20_001"
     
