@@ -87,7 +87,7 @@ def _print_audit_report(
         
         def count_ranks(tids_list):
             counts = {}
-            t_arr = np.array(tids_list, dtype=np.int32)
+            t_arr = np.array(tids_list, dtype=np.uint32)
             valid_idx = tree._get_indices(t_arr)
             valid_idx = valid_idx[valid_idx != -1]
             if len(valid_idx) > 0:

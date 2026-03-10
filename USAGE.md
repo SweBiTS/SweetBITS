@@ -27,6 +27,14 @@ Create a wide-format matrix from merged reports.
 # Default (Clade mode, SWEBITS period grouping)
 sweetbits produce table merged_reports.parquet --output abundance_table.tsv
 
+# Dry-run: Preview filtering retention statistics without saving
+sweetbits produce table merged_reports.parquet \
+    --mode canonical \
+    --taxonomy /path/to/joltax_cache \
+    --min-observed 25 \
+    --min-reads 50 \
+    --dry-run
+
 # Taxon mode with specific filtering
 sweetbits produce table merged_reports.parquet \
     --output taxon_table.csv \

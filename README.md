@@ -42,10 +42,11 @@ SweetBITS provides several high-performance tools for processing Kraken 2 output
 - `collect kraken reports`: Merges multiple Kraken reports into a single, Polars-optimized Parquet file with full provenance metadata (saved to a JSON companion file). Supports flexible SweBITS sample IDs (e.g., `Ki-2022_20_001`, `Lj_2013_1_142`, `Ki-2022-01-1`).
     - *Automatic Detection:* Handles both newer 8-column (with minimizers) and legacy 6-column Kraken reports automatically.
     - *Automatic Data Standard:* Automatically detects and adapts to SweBITS or Generic datasets based on input filenames.
-- `produce table`: Generates wide-format abundance matrices. Supports three modes:
+- `produce table`: Generates wide-format abundance matrices. An audit report is printed to the terminal summarizing data retention after filtering. Supports three modes:
     - `taxon`: Direct taxonomic assignments.
     - `clade`: Cumulative clade counts (contains redundant counts).
     - `canonical`: **Canonical Remainders**. Essentially taxon mode but where reads between canonical ranks have been pushed up to the nearest canonical ancestor (NCA). Eliminates double-counting while conserving mass balance. Supports "non-canonical rank skipping" (Canonical Rank Read Standardization).
+    - *Dry Run:* Use `--dry-run` to preview the audit report and taxon retention statistics without saving the output file.
     - *Note:* `--exclude-samples` will issue a warning if an ID in your exclusion file is missing from the dataset.
 - `annotate`: Transforms numeric abundance matrices into human-readable files. Automatically injects full taxonomic lineages from JolTax, calculates mean_signal, and supports two sorting modes:
     - `alphabetical`: Hierarchical rank-based sort (Domain -> Phylum -> ...).

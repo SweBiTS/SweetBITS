@@ -156,6 +156,7 @@ Outputs abundance tables with `t_id` as the index and samples (YYYY_WW) as colum
   - `--output FILE`: Path to the output file (Supported: `.csv`, `.tsv`, `.parquet`). Format inferred from suffix.
   - `--taxonomy DIR`: JolTax cache directory (Required for `canonical` mode or `--clade` filtering).
   - `--overwrite`: Overwrite the output file if it exists.
+  - `--dry-run`: If True, prints a comprehensive audit report of data retention and exits without saving.
 
 #### `produce reads`
 Streams `<KRAKEN_PARQUET>` to extract reads into FASTQ format with high throughput and a constant memory profile.
