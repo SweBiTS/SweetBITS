@@ -38,7 +38,9 @@ def _print_audit_report(
     final_taxa_count: int,
     num_sample_cols: int,
     base_clade_reads: Optional[Dict[str, float]] = None,
-    retained_clade_reads: Optional[Dict[str, float]] = None
+    retained_clade_reads: Optional[Dict[str, float]] = None,
+    base_taxon_reads: Optional[Dict[str, float]] = None,
+    retained_taxon_reads: Optional[Dict[str, float]] = None
 ):
     """Prints the audit report for table generation."""
     click.secho("\n" + "="*80, fg="bright_black", err=True)
@@ -66,9 +68,6 @@ def _print_audit_report(
         click.secho(f"Filtered Out          : {filtered_out:,}", err=True)
         read_pct = (retained_reads / baseline_reads * 100) if baseline_reads > 0 else 0
         click.secho(f"Reads Retained        : {retained_reads:,} ({read_pct:.1f}%)", err=True)
-        
-        if mode == "clade":
-            click.secho("Note: Clade mode output is cumulative; table sum will exceed these values.", fg="bright_black", err=True)
         
         comp_status = "YES (Filtered reads retained in synthetic bin)" if produced_synthetic else "NO"
         
@@ -125,14 +124,10 @@ def _print_audit_report(
     click.echo("", err=True)
 
     if base_clade_reads is not None and retained_clade_reads is not None:
-        click.secho("[ 4 ] Read Retention by Rank", fg="cyan", bold=True, err=True)
+        click.secho("[ 4 ] Read Retention at CLADE Level by Canonical Rank", fg="cyan", bold=True, err=True)
         click.secho("-" * 80, fg="bright_black", err=True)
         click.secho(f"{'Rank':<16} {'Original Reads':<18} {'Retained Reads':<18} {'Retention %':<12}", bold=True, err=True)
         click.secho("-" * 80, fg="bright_black", err=True)
-        
-        # Add Total Classified (taxon-based total reads)
-        total_reads_pct = (retained_reads / baseline_reads * 100) if baseline_reads > 0 else 0
-        click.secho(f"{'Classified':<16} {int(baseline_reads):<18,} {int(retained_reads):<18,} {total_reads_pct:.1f}%", bold=True, err=True)
         
         for rank in display_ranks:
             if rank in base_clade_reads:
@@ -141,9 +136,28 @@ def _print_audit_report(
                 pct = (r_r / o_r * 100) if o_r > 0 else 0
                 click.secho(f"{rank.capitalize():<16} {int(o_r):<18,} {int(r_r):<18,} {pct:.1f}%", err=True)
         click.secho("-" * 80, fg="bright_black", err=True)
+        click.secho(" This table sums cumulative clade counts at each rank. Reads are multi-counted", fg="bright_black", italic=True, err=True)
+        click.secho(" across ranks. Non-monotonicity may occur if lineages skip standard ranks.", fg="bright_black", italic=True, err=True)
         click.echo("", err=True)
 
-    click.secho("[ 5 ] Final Table Shape", fg="cyan", bold=True, err=True)
+    if base_taxon_reads is not None and retained_taxon_reads is not None:
+        click.secho("[ 5 ] Read Retention at TAXON Level by Canonical Rank", fg="cyan", bold=True, err=True)
+        click.secho("-" * 80, fg="bright_black", err=True)
+        click.secho(f"{'Rank':<16} {'Original Reads':<18} {'Retained Reads':<18} {'Retention %':<12}", bold=True, err=True)
+        click.secho("-" * 80, fg="bright_black", err=True)
+        
+        for rank in display_ranks:
+            if rank in base_taxon_reads:
+                o_r = base_taxon_reads[rank]
+                r_r = retained_taxon_reads.get(rank, 0.0)
+                pct = (r_r / o_r * 100) if o_r > 0 else 0
+                click.secho(f"{rank.capitalize():<16} {int(o_r):<18,} {int(r_r):<18,} {pct:.1f}%", err=True)
+        click.secho("-" * 80, fg="bright_black", err=True)
+        click.secho(" This table sums direct taxon assignments for each rank. Every classified read", fg="bright_black", italic=True, err=True)
+        click.secho(" is counted exactly once. Ranks with 0 reads were assigned to children.", fg="bright_black", italic=True, err=True)
+        click.echo("", err=True)
+
+    click.secho("[ 6 ] Final Table Shape", fg="cyan", bold=True, err=True)
     click.secho("-" * 80, fg="bright_black", err=True)
     
     row_str = f"{final_taxa_count}"
@@ -161,15 +175,15 @@ def _print_audit_report(
     click.secho("="*80 + "\n", fg="bright_black", err=True)
 
 
-def _aggregate_reads_by_rank(df: pl.DataFrame, tree: JolTree) -> Dict[str, float]:
-    """Helper to sum clade reads for each canonical rank."""
+def _aggregate_reads_by_rank(df: pl.DataFrame, tree: JolTree, col_name: str = "clade_reads") -> Dict[str, float]:
+    """Helper to sum specified read column for each canonical rank."""
     # 1. Sum across samples for each node. 
-    # CRITICAL: Cast to UInt64 before sum to prevent 32-bit integer overflow on large datasets.
-    node_sums = df.group_by("t_id").agg(pl.col("clade_reads").cast(pl.UInt64).sum())
+    # CRITICAL: Cast to UInt64 before sum to prevent 32-bit integer overflow.
+    node_sums = df.group_by("t_id").agg(pl.col(col_name).cast(pl.UInt64).sum())
     
-    # 2. Extract to numpy and ensure parallel processing
+    # 2. Extract to numpy
     tids = node_sums["t_id"].to_numpy()
-    reads = node_sums["clade_reads"].to_numpy().astype(np.float64)
+    reads = node_sums[col_name].to_numpy().astype(np.float64)
     
     counts = {}
     if len(tids) == 0:
@@ -488,9 +502,13 @@ def generate_table_logic(
     
     base_clade_dict = None
     retained_clade_dict = None
+    base_taxon_dict = None
+    retained_taxon_dict = None
     if tree and sample_cols and not proportions:
-        base_clade_dict = _aggregate_reads_by_rank(baseline_df, tree)
-        retained_clade_dict = _aggregate_reads_by_rank(filtered_df, tree)
+        base_clade_dict = _aggregate_reads_by_rank(baseline_df, tree, "clade_reads")
+        retained_clade_dict = _aggregate_reads_by_rank(filtered_df, tree, "clade_reads")
+        base_taxon_dict = _aggregate_reads_by_rank(baseline_df, tree, "taxon_reads")
+        retained_taxon_dict = _aggregate_reads_by_rank(filtered_df, tree, "taxon_reads")
     
     if dry_run:
         _print_audit_report(
@@ -513,7 +531,9 @@ def generate_table_logic(
             final_taxa_count=table.height,
             num_sample_cols=len(sample_cols),
             base_clade_reads=base_clade_dict,
-            retained_clade_reads=retained_clade_dict
+            retained_clade_reads=retained_clade_dict,
+            base_taxon_reads=base_taxon_dict,
+            retained_taxon_reads=retained_taxon_dict
         )
         click.secho("Dry-run complete. Exiting without saving.", fg="yellow", bold=True, err=True)
         return {
@@ -563,7 +583,9 @@ def generate_table_logic(
         final_taxa_count=table.height,
         num_sample_cols=len(sample_cols),
         base_clade_reads=base_clade_dict,
-        retained_clade_reads=retained_clade_dict
+        retained_clade_reads=retained_clade_dict,
+        base_taxon_reads=base_taxon_dict,
+        retained_taxon_reads=retained_taxon_dict
     )
         
     return {
