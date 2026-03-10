@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import List, Dict, Any
 
 UNCLASSIFIED_TID = 0
-FILTERED_TID = 4294967295
+FILTERED_TID = 100000000
 
 def get_sample_info(filename: str) -> Dict[str, Any]:
     """
