@@ -156,7 +156,7 @@ def _print_audit_report(
 def _aggregate_reads_by_rank(df: pl.DataFrame, tree: JolTree) -> Dict[str, float]:
     """Helper to sum clade reads for each canonical rank."""
     # Sum across samples for each node
-    node_sums = df.group_by("t_id").agg(pl.col("clade_reads").sum()).to_pandas()
+    node_sums = df.group_by("t_id").agg(pl.col("clade_reads").sum())
     
     tids = node_sums["t_id"].to_numpy()
     reads = node_sums["clade_reads"].to_numpy()
