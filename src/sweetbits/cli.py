@@ -151,18 +151,19 @@ def collect_kraken_reports(directory, output, recursive, include, cores, overwri
 @click.option("--exclude-samples", type=click.Path(exists=True, path_type=Path), help="File with sample IDs to exclude.")
 @click.option("--min-observed", type=int, default=25, help="Minimum samples taxon must be in (Default: 25).")
 @click.option("--min-reads", type=int, default=50, help="Minimum max reads across samples (Default: 50).")
-@click.option("--clade", type=int, help="Filter for taxa rooted at this TaxID.")
+@click.option("--clade", "clade_filter", type=int, help="Filter for taxa rooted at this TaxID.")
 @click.option("--keep-unclassified", is_flag=True, help="Keep TaxID 0 (unclassified).")
 @click.option("--proportions", is_flag=True, help="Output relative proportions instead of raw reads.")
 @click.option("--keep-composition", is_flag=True, help="Retain filtered reads as 'Filtered classified' to preserve global total reads. Forces --keep-unclassified.")
 @click.option("--cores", type=int, help="Number of CPU cores to use (Default: all available).")
 @click.option("--overwrite", is_flag=True, help="Overwrite output file if it exists.")
 @click.option("--dry-run", is_flag=True, help="Print an audit report of filtering retention without saving the file.")
-def produce_table(input_parquet, output, mode, taxonomy, exclude_samples, min_observed, min_reads, clade, keep_unclassified, proportions, keep_composition, cores, overwrite, dry_run):
+def produce_table(input_parquet, output, mode, taxonomy, exclude_samples, min_observed, min_reads, clade_filter, keep_unclassified, proportions, keep_composition, cores, overwrite, dry_run):
     """
     Outputs abundance tables with TaxIDs as rows and samples as columns.
     Supports filtering by clade, minimum occupancy, and read depth. Output is
-    <RAW_TABLE>.
+    <RAW_TABLE>. An audit report is printed to the terminal summarizing data 
+    retention after filtering.
     """
     if not output and not dry_run:
         raise click.UsageError("Missing option '--output' / '-o'.")
@@ -175,21 +176,29 @@ def produce_table(input_parquet, output, mode, taxonomy, exclude_samples, min_ob
 
     start_time = time.time()
     ctx = click.get_current_context()
+    
+    # Force sync parameters for display and logic
+    if keep_composition:
+        ctx.params["keep_unclassified"] = True
+    
+    # For display, we use the context params dictionary
+    params_for_display = ctx.params.copy()
+    
     print_splash()
     print_invocation_info()
-    print_parameters(ctx.params)
+    print_parameters(params_for_display)
     
     try:
         summary = generate_table_logic(
             input_parquet=input_parquet,
             output_file=output_path,
             mode=mode,
-            taxonomy_dir=taxonomy,
+            taxonomy_dir=ctx.params.get("taxonomy"),
             exclude_samples=exclude_samples,
             min_observed=min_observed,
             min_reads=min_reads,
-            clade_filter=clade,
-            keep_unclassified=keep_unclassified,
+            clade_filter=clade_filter,
+            keep_unclassified=ctx.params.get("keep_unclassified"),
             proportions=proportions,
             keep_composition=keep_composition,
             cores=cores,
