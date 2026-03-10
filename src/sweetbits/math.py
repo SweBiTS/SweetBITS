@@ -158,24 +158,41 @@ def calc_clade_sum(
             if len(final_targets) > 0:
                 np.add.at(clade_reads, final_targets, clade_reads[final_sources])
 
-    # 3. Reconstruct the Dataframe
-    # Update the matrix dataframe with our new computed counts
-    matrix_df = matrix_df.with_columns([
-        pl.Series(name, taxon_reads[:, i]) for i, name in enumerate(sample_cols)
-    ])
+    # 3. Reconstruct the Dataframe directly to long format
+    # This avoids a massive memory spike caused by Polars unpivot() and join() on huge matrices.
+    # By using np.where on a boolean mask, we extract only the non-zero (or unclassified) cells.
+    from sweetbits.utils import UNCLASSIFIED_TID
     
-    clade_df = pl.DataFrame({name: clade_reads[:, i] for i, name in enumerate(sample_cols)})
-    clade_df = clade_df.with_columns(pl.Series("t_id", tids))
+    # We must keep cells where clade_reads > 0 OR it's the unclassified node 
+    # to maintain mathematical integrity for the audit reports and mass balance.
+    # First, find the row index for unclassified
+    unclass_row_mask = tids == UNCLASSIFIED_TID
     
-    # We unpivot (melt) back to long format.
-    # We must explicitly keep rows even if they are 0 to allow `tables.py` to calculate
-    # base reads vs retained correctly, OR we filter out pure 0 rows here.
-    # The requirement: "discard any row where clade_reads == 0" (except Unclassified).
+    # Create a boolean mask of the entire matrix (True = keep)
+    keep_mask = (clade_reads > 0)
     
-    # Unpivot taxon
-    taxon_long = matrix_df.unpivot(index="t_id", on=sample_cols, variable_name="sample_id", value_name="taxon_reads")
-    clade_long = clade_df.unpivot(index="t_id", on=sample_cols, variable_name="sample_id", value_name="clade_reads")
+    # Force the unclassified row to be kept entirely (all samples)
+    if np.any(unclass_row_mask):
+        keep_mask[unclass_row_mask, :] = True
+        
+    # Extract just the non-zero values to save memory
+    flat_taxon = taxon_reads[keep_mask]
+    flat_clade = clade_reads[keep_mask]
     
-    result_df = taxon_long.join(clade_long, on=["t_id", "sample_id"])
+    # Find the original matrix coordinates for those values
+    row_idx, col_idx = np.where(keep_mask)
+    
+    # Map coordinates back to actual IDs
+    tids_filtered = tids[row_idx]
+    
+    samples_arr = np.array(sample_cols)
+    samples_filtered = samples_arr[col_idx]
+    
+    result_df = pl.DataFrame({
+        "t_id": pl.Series(tids_filtered, dtype=matrix_df.schema["t_id"]),
+        "sample_id": pl.Series(samples_filtered, dtype=pl.Categorical),
+        "taxon_reads": pl.Series(flat_taxon, dtype=pl.UInt32),
+        "clade_reads": pl.Series(flat_clade, dtype=pl.UInt32)
+    })
     
     return result_df, synthetic_bin

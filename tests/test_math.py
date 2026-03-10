@@ -53,7 +53,7 @@ def test_calc_clade_sum_filtering(tmp_path):
     
     res_dict = {row["t_id"]: row["clade_reads"] for row in result.to_dicts()}
     
-    assert res_dict[9606] == 0  # Failed
+    assert 9606 not in res_dict  # Failed, should be pruned
     assert res_dict[2] == 20    # Passed
     assert res_dict[1] == 20    # Only got 20 from Bacteria
     
