@@ -181,7 +181,7 @@ def test_annotate_table_dfs_special_rows(tmp_path, mock_taxonomy):
     
     df_res = pl.read_csv(out_path)
     tids = df_res["t_id"].to_list()
-    # Unclassified (0) then Filtered (4294967295) then Tree (2, 9606)
+    # Unclassified (0) then Filtered (10000000) then Tree (2, 9606)
     assert tids[0] == UNCLASSIFIED_TID
     assert tids[1] == FILTERED_TID
     assert tids[2:] == [2, 9606] # 2 (10) heavier than 9606 (1)
@@ -209,7 +209,7 @@ def test_annotate_table_alphabetical_special_rows(tmp_path, mock_taxonomy):
     
     df_res = pl.read_csv(out_path)
     tids = df_res["t_id"].to_list()
-    # Unclassified (0) then Filtered (4294967295) then Alphabetical Tree
+    # Unclassified (0) then Filtered (10000000) then Alphabetical Tree
     assert tids[0] == UNCLASSIFIED_TID
     assert tids[1] == FILTERED_TID
     # Alphabetical order: Bacteria (2) then Eukaryota (9606)
