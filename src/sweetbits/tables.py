@@ -259,7 +259,26 @@ def generate_table_logic(
                 exprs.append((pl.col(c) / total).alias(c))
             table = table.with_columns(exprs)
             
-    # 9. Audit Report Calculation and Printing
+    # 9. Output Generation (Skip if dry_run)
+    if not dry_run:
+        click.secho(f"Saving output to {output_file.name}...", fg="cyan", err=True)
+        ext = output_file.suffix.lower()
+        meta = get_standard_metadata("RAW_TABLE", source_path=input_parquet, sorting="t_id", data_standard=data_standard)
+        meta["mode"] = mode
+        
+        if ext == ".parquet":
+            table.write_parquet(output_file)
+        elif ext == ".csv":
+            table.write_csv(output_file)
+        elif ext == ".tsv":
+            table.write_csv(output_file, separator="\t")
+        else:
+            raise ValueError(f"Unsupported output format: {ext}")
+            
+        save_companion_metadata(output_file, meta)
+        click.secho("Done!", fg="cyan", bold=True, err=True)
+
+    # 10. Audit Report Calculation and Printing (Always last)
     base_clade_dict = None
     retained_clade_dict = None
     base_taxon_dict = None
@@ -303,24 +322,6 @@ def generate_table_logic(
             "rows_output": table.height,
             "output_file": "DRY_RUN"
         }
-        
-    # 10. Output Generation
-    click.secho(f"Saving output to {output_file.name}...", fg="cyan", err=True)
-    ext = output_file.suffix.lower()
-    meta = get_standard_metadata("RAW_TABLE", source_path=input_parquet, sorting="t_id", data_standard=data_standard)
-    meta["mode"] = mode
-    
-    if ext == ".parquet":
-        table.write_parquet(output_file)
-    elif ext == ".csv":
-        table.write_csv(output_file)
-    elif ext == ".tsv":
-        table.write_csv(output_file, separator="\t")
-    else:
-        raise ValueError(f"Unsupported output format: {ext}")
-        
-    save_companion_metadata(output_file, meta)
-    click.secho("Done!", fg="cyan", bold=True, err=True)
 
     return {
         "data_standard": data_standard,
