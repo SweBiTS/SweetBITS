@@ -154,11 +154,12 @@ def collect_kraken_reports(directory, output, recursive, include, cores, overwri
 @click.option("--clade", "clade_filter", type=int, help="Filter for taxa rooted at this TaxID.")
 @click.option("--keep-unclassified", is_flag=True, help="Keep TaxID 0 (unclassified).")
 @click.option("--proportions", is_flag=True, help="Output relative proportions instead of raw reads.")
-@click.option("--keep-filtered", is_flag=True, help="Retain filtered reads as 'Filtered classified' to preserve global total reads. Forces --keep-unclassified.")
+@click.option("--keep-filtered", is_flag=True, help="When using --clade, retains out-of-clade classified reads as 'Filtered classified' to preserve global total classified mass.")
+@click.option("--mass-balance", is_flag=True, help="Convenience flag: equivalent to passing both --keep-filtered and --keep-unclassified.")
 @click.option("--cores", type=int, help="Number of CPU cores to use (Default: all available).")
 @click.option("--overwrite", is_flag=True, help="Overwrite output file if it exists.")
 @click.option("--dry-run", is_flag=True, help="Print an audit report of filtering retention without saving the file.")
-def produce_table(input_parquet, output, mode, taxonomy, exclude_samples, min_observed, min_reads, clade_filter, keep_unclassified, proportions, keep_filtered, cores, overwrite, dry_run):
+def produce_table(input_parquet, output, mode, taxonomy, exclude_samples, min_observed, min_reads, clade_filter, keep_unclassified, proportions, keep_filtered, mass_balance, cores, overwrite, dry_run):
     """
     Outputs abundance tables with TaxIDs as rows and samples as columns.
     Supports filtering by clade, minimum occupancy, and read depth. Output is
@@ -171,18 +172,22 @@ def produce_table(input_parquet, output, mode, taxonomy, exclude_samples, min_ob
     # Create a dummy path for dry-run if not provided to pass type checks
     output_path = output if output else Path("dry_run_output.tmp")
 
-    if keep_filtered:
+    if mass_balance:
+        keep_filtered = True
         keep_unclassified = True
 
     start_time = time.time()
     ctx = click.get_current_context()
     
-    # Force sync parameters for display and logic
-    if keep_filtered:
+    # Force sync parameters for display
+    if mass_balance:
+        ctx.params["keep_filtered"] = True
         ctx.params["keep_unclassified"] = True
     
     # For display, we use the context params dictionary
     params_for_display = ctx.params.copy()
+    if "mass_balance" in params_for_display:
+        del params_for_display["mass_balance"]
     
     print_splash()
     print_invocation_info()
@@ -198,7 +203,7 @@ def produce_table(input_parquet, output, mode, taxonomy, exclude_samples, min_ob
             min_observed=min_observed,
             min_reads=min_reads,
             clade_filter=clade_filter,
-            keep_unclassified=ctx.params.get("keep_unclassified"),
+            keep_unclassified=keep_unclassified,
             proportions=proportions,
             keep_filtered=keep_filtered,
             cores=cores,

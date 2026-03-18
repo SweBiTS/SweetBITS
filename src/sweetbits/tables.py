@@ -9,7 +9,7 @@ import click
 from pathlib import Path
 from typing import Optional, Dict, Any
 from joltax import JolTree
-from sweetbits.utils import load_sample_id_list, FILTERED_TID, UNCLASSIFIED_TID, check_write_permission
+from sweetbits.utils import load_sample_id_list, UNCLASSIFIED_TID, FILTERED_TID, check_write_permission
 from sweetbits.metadata import get_standard_metadata, save_companion_metadata, validate_sweetbits_file
 from sweetbits.taxmath import calc_clade_sum
 from sweetbits.canonical import calculate_canonical_remainders
@@ -57,9 +57,8 @@ def generate_table_logic(
         clade_filter      : Optional TaxID to restrict output to a specific clade.
         keep_unclassified : Whether to include TaxID 0 in the output.
         proportions       : If True, outputs relative proportions instead of raw read counts.
-        keep_filtered     : If True (taxon/canonical modes only), retains filtered reads in a 
-                            synthetic 'Filtered classified' bin to preserve the global read total
-                            for accurate relative abundance calculations.
+        keep_filtered     : When using --clade, retains out-of-clade reads as 'Filtered classified' 
+                            to preserve global total reads for accurate relative abundance calculations.
         cores             : Number of CPU cores to use for Polars operations.
         overwrite         : Whether to overwrite the output file if it exists.
         dry_run           : If True, prints the audit report and returns without saving.
@@ -98,8 +97,6 @@ def generate_table_logic(
     lf = pl.scan_parquet(input_parquet)
     
     # 2. Sample Filtering and Validation
-    # We must evaluate exclusions against the original sample_id BEFORE SWEBITS consolidation
-    # to ensure the user's exclusion file matches the data.
     all_ids = set(lf.select("sample_id").unique().collect()["sample_id"].to_list())
     excluded_ids = []
     phantom_ids = []
@@ -116,15 +113,11 @@ def generate_table_logic(
             )
         lf = lf.filter(~pl.col("sample_id").is_in(excluded_ids))
         
-    # Now we can normalize SWEBITS data
     if data_standard == "SWEBITS":
-        # Consolidate SWEBITS samples into standard 'sample_id' format
         lf = lf.with_columns(
             (pl.col("year").cast(pl.String) + "_" + pl.col("week").cast(pl.String).str.pad_start(2, "0")).alias("period")
         ).drop("sample_id").rename({"period": "sample_id"})
         
-    # Isolate required columns and collect into eager memory ONCE. 
-    # This prevents multiple disk I/O passes for true_totals and math.
     input_df = lf.select(["t_id", "sample_id", "taxon_reads"]).collect()
     
     active_samples = input_df.select("sample_id").n_unique()
@@ -135,14 +128,19 @@ def generate_table_logic(
             fg="yellow", err=True
         )
 
-    # 3. Baseline Computation (Global Totals)
+    # 3. Handle Unclassified explicit user intent FIRST
+    if not keep_unclassified and mode != "canonical":
+        click.secho("Filtering out unclassified reads...", fg="cyan", err=True)
+        input_df = input_df.filter(pl.col("t_id") != 0)
+
+    # 4. Baseline Computation (Global Totals for mass preservation)
     true_totals = {}
-    if keep_filtered:
-        click.secho("Calculating baseline totals for keep-filtered logic...", fg="cyan", err=True)
+    if keep_filtered and clade_filter is not None:
+        click.secho("Calculating baseline totals for global mass preservation...", fg="cyan", err=True)
         totals_df = input_df.group_by("sample_id").agg(pl.col("taxon_reads").sum().alias("total_reads"))
         true_totals = dict(zip(totals_df["sample_id"].to_list(), totals_df["total_reads"].to_list()))
 
-    # 4. Taxonomic Filtering (JolTax Integration)
+    # 5. Taxonomic Filtering (JolTax Integration)
     if not taxonomy_dir:
         raise ValueError("Taxonomy directory is required for table generation.")
         
@@ -152,23 +150,22 @@ def generate_table_logic(
     if clade_filter is not None:
         click.secho(f"Applying clade filter for TaxID {clade_filter}...", fg="cyan", err=True)
         clade_taxids = tree.get_clade(clade_filter)
-        input_df = input_df.filter(pl.col("t_id").is_in(clade_taxids))
+        if keep_unclassified:
+            input_df = input_df.filter(pl.col("t_id").is_in(clade_taxids) | (pl.col("t_id") == 0))
+        else:
+            input_df = input_df.filter(pl.col("t_id").is_in(clade_taxids))
         
-    if not keep_unclassified and mode != "canonical":
-        click.secho("Filtering out unclassified reads...", fg="cyan", err=True)
-        input_df = input_df.filter(pl.col("t_id") != 0)
-        
-    # 5. Dynamic Clade Math & Filtering
+    # 6. Dynamic Clade Math & Filtering
     click.secho("Applying dynamic recursive filtering and calculating clades...", fg="cyan", err=True)
         
     # Calculate baseline for audit report (no filters)
-    baseline_df, _ = calc_clade_sum(
-        input_df, tree, min_reads=0, min_observed=0, keep_filtered=False
+    baseline_df = calc_clade_sum(
+        input_df, tree, min_reads=0, min_observed=0
     )
     
     # Calculate filtered for actual output
-    filtered_df, synthetic_bin = calc_clade_sum(
-        input_df, tree, min_reads=min_reads, min_observed=min_observed, keep_filtered=keep_filtered
+    filtered_df = calc_clade_sum(
+        input_df, tree, min_reads=min_reads, min_observed=min_observed
     )
     
     # Prune rows where clade_reads is 0 (except Unclassified)
@@ -177,10 +174,10 @@ def generate_table_logic(
     
     if clade_filter is not None:
         clade_taxids = tree.get_clade(clade_filter)
-        baseline_df = baseline_df.filter(pl.col("t_id").is_in(clade_taxids))
-        filtered_df = filtered_df.filter(pl.col("t_id").is_in(clade_taxids))
+        baseline_df = baseline_df.filter(pl.col("t_id").is_in(clade_taxids) | (pl.col("t_id") == 0))
+        filtered_df = filtered_df.filter(pl.col("t_id").is_in(clade_taxids) | (pl.col("t_id") == 0))
     
-    # 6. Mode Extraction and Matrix Generation
+    # 7. Mode Extraction and Matrix Generation
     click.secho(f"Extracting '{mode}' metrics...", fg="cyan", err=True)
     if mode == "taxon":
         pivot_df = filtered_df.select(["t_id", "sample_id", "taxon_reads"])
@@ -206,7 +203,7 @@ def generate_table_logic(
         aggregate_function="sum"
     ).fill_null(0).sort("t_id")
     
-    # 6.5 Capture Baseline Metrics for Audit Report
+    # Capture Baseline Metrics for Audit Report
     baseline_taxa_count = baseline_df.select("t_id").n_unique()
     base_tids = baseline_df.select("t_id").unique()["t_id"].to_list()
     
@@ -218,18 +215,31 @@ def generate_table_logic(
         baseline_reads = baseline_df.select(pl.col("taxon_reads").sum()).item()
         retained_reads = filtered_df.select(pl.col("taxon_reads").sum()).item()
         
-    # 7. Composition Preservation
+    # 8. Composition Preservation (Global Mass for Clade Filter)
     produced_synthetic = False
-    if keep_filtered and sample_cols:
-        click.secho("Applying keep-filtered logic to preserve mass balance...", fg="cyan", err=True)
+    if keep_filtered and clade_filter is not None and sample_cols:
+        click.secho("Injecting missing global mass into synthetic 'Filtered' row...", fg="cyan", err=True)
         filtered_row = {"t_id": FILTERED_TID}
         has_filtered = False
         
-        surviving_totals = filtered_df.group_by("sample_id").agg(pl.col("taxon_reads").sum().alias("survived"))
-        surviving_map = dict(zip(surviving_totals["sample_id"].to_list(), surviving_totals["survived"].to_list()))
+        # We need to know how much mass the CURRENT table holds
+        # In clade mode, the top node (the clade filter root) holds the total classified mass.
+        # In taxon/canonical mode, it's the sum of the columns.
+        if mode == "clade":
+            # For clade mode, we look for the highest clade_read value + unclassified
+            surviving_totals = {}
+            for c in sample_cols:
+                max_class = table.filter(pl.col("t_id") != 0)[c].max()
+                if max_class is None: max_class = 0
+                unclass = table.filter(pl.col("t_id") == 0)[c].sum()
+                if unclass is None: unclass = 0
+                surviving_totals[c] = max_class + unclass
+        else:
+            # For taxon/canonical mode, it's a simple sum
+            surviving_totals = {c: table[c].sum() for c in sample_cols}
 
         for c in sample_cols:
-            survived = surviving_map.get(c, 0)
+            survived = surviving_totals.get(c, 0)
             original_total = true_totals.get(c, survived)
             diff = max(0, original_total - survived)
             filtered_row[c] = diff
@@ -241,7 +251,7 @@ def generate_table_logic(
             table = pl.concat([table, filtered_df_table])
             produced_synthetic = True
             
-    # 8. Proportion Calculation
+    # 9. Proportion Calculation
     if proportions and sample_cols:
         click.secho("Converting counts to relative proportions...", fg="cyan", err=True)
         if mode in ["taxon", "canonical"]:
@@ -250,16 +260,22 @@ def generate_table_logic(
         elif mode == "clade":
             exprs = []
             for c in sample_cols:
-                max_class = table.filter(pl.col("t_id") != 0)[c].max()
+                # If we injected the FILTERED_TID, it must be added to the denominator
+                filtered_mass = table.filter(pl.col("t_id") == FILTERED_TID)[c].sum()
+                if filtered_mass is None: filtered_mass = 0
+                
+                max_class = table.filter((pl.col("t_id") != 0) & (pl.col("t_id") != FILTERED_TID))[c].max()
                 if max_class is None: max_class = 0
+                
                 unclass = table.filter(pl.col("t_id") == 0)[c].sum()
                 if unclass is None: unclass = 0
-                total = max_class + unclass
+                
+                total = max_class + unclass + filtered_mass
                 if total == 0: total = 1
                 exprs.append((pl.col(c) / total).alias(c))
             table = table.with_columns(exprs)
             
-    # 9. Output Generation (Skip if dry_run)
+    # 10. Output Generation (Skip if dry_run)
     if not dry_run:
         click.secho(f"Saving output to {output_file.name}...", fg="cyan", err=True)
         ext = output_file.suffix.lower()
@@ -278,7 +294,7 @@ def generate_table_logic(
         save_companion_metadata(output_file, meta)
         click.secho("Done!", fg="cyan", bold=True, err=True)
 
-    # 10. Audit Report Calculation and Printing (Always last)
+    # 11. Audit Report Calculation and Printing (Always last)
     base_clade_dict = None
     retained_clade_dict = None
     base_taxon_dict = None
@@ -299,8 +315,6 @@ def generate_table_logic(
         mode=mode,
         baseline_reads=baseline_reads,
         retained_reads=retained_reads,
-        produced_synthetic=produced_synthetic,
-        keep_filtered=keep_filtered,
         has_unclass=UNCLASSIFIED_TID in table["t_id"].to_list(),
         tree=tree,
         base_tids=base_tids,
